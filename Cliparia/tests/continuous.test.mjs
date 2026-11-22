@@ -99,6 +99,27 @@ test('lote processa uma fonte por vez e volta à que ficou incompleta no próxim
  assert.ok(queue.status().sources.every(source=>source.done));
 });
 
+test('lote passa por fonte offline, começa uma segunda fonte e conserva o motivo após reiniciar',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'cliparia-cloud-offline-'));
+ t.after(()=>rm(dir,{recursive:true,force:true}));
+ const file=path.join(dir,'continuo.json'),checked=[],launched=[];
+ const services={batchOnly:true,connected:()=>true,async sourceInfo(url){
+  checked.push(url);
+  if(url.endsWith('/offline'))throw Error('Channel is offline');
+  return {id:url,is_live:true};
+ },async launch(source){launched.push(source.url);return {stopped:true};}};
+ const queue=createContinuous(file,services);
+ queue.setEnabled(true);
+ for(const channel of ['offline','nova','outra'])queue.add('https://kick.com/'+channel,{},false);
+ await queue.tick({batch:true});
+ assert.deepEqual(checked,['https://kick.com/offline','https://kick.com/nova']);
+ assert.deepEqual(launched,['https://kick.com/nova']);
+ const [offline,nova,outra]=createContinuous(file,services).status().sources;
+ assert.equal(offline.status,'Canal offline · aguardando a live');
+ assert.equal(nova.status,'Aguardando o próximo lote');
+ assert.equal(outra.status,'Na fila');
+});
+
 test('acompanhar novas lives exige um endereço de canal',()=>{
  assert.ok(channelLink('https://www.twitch.tv/canal'));
  assert.ok(channelLink('https://youtube.com/@canal/live'));

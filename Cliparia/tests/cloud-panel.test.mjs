@@ -116,6 +116,14 @@ test('o cron do painel dispara o GitHub apenas quando não existe outro lote rec
  assert.ok(calls.every(call=>call.redirect==='manual'));
  assert.match(calls[2].url,/\/cliparia-nuvem\.yml\/dispatches$/);
  assert.deepEqual(JSON.parse(calls[2].body),{ref:'main',inputs:{painel_somente:false}});
+ const recentDate=new Date(scheduledTime-120_000).toISOString();
+ runs=[{status:'completed',conclusion:'success',display_title:'Cliparia · Sincronizar painel',created_at:recentDate}];
+ await worker.scheduled({scheduledTime},env);
+ assert.equal(calls.at(-1).method,'POST');
+ runs=[{status:'completed',conclusion:'success',display_title:'Cliparia · Gerar e publicar',created_at:recentDate}];
+ const before=calls.length;
+ await worker.scheduled({scheduledTime},env);
+ assert.equal(calls.length,before+1);
 });
 
 test('o painel mostra o lote ativo apenas depois do login e só expõe seu estado',async t=>{

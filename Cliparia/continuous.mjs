@@ -6,6 +6,8 @@ import {assertScreened} from './safety.mjs';
 
 const pollDelay=60_000;
 const defaultLimit=2;
+const batchSourceChecks=4;
+const activeStatuses=new Set(['Verificando a fonte','Capturando live','Analisando VOD por trechos']);
 export function channelLink(url){
  let u;
  try{u=new URL(url);}catch{return false;}
@@ -21,6 +23,7 @@ export function createContinuous(file,{sourceInfo,launch,stop,connected,batchOnl
  data.autoQueue??={enabled:false,targets:[]};
  const active=new Map();
  const busyKeys=new Set();
+ let batchWork;
  const save=()=>{
   fs.writeFileSync(file+'.tmp',JSON.stringify(data));
   fs.renameSync(file+'.tmp',file);
@@ -36,7 +39,7 @@ export function createContinuous(file,{sourceInfo,launch,stop,connected,batchOnl
   data.exhaustiveVersion=1;save();
  }
  for(const source of data.sources){
-  if(!source.done)source.status='Na fila';
+  if(!source.done&&activeStatuses.has(source.status))source.status='Aguardando o próximo lote';
  }
  function update(source,status,delay=0){
   source.status=status;
@@ -72,30 +75,47 @@ export function createContinuous(file,{sourceInfo,launch,stop,connected,batchOnl
    busyKeys.add(key);locked=true;
    update(source,live?'Capturando live':'Analisando VOD por trechos');
    const outcome=await launch(source,meta,key,item,()=>!data.enabled||item.cancelled);
-   if(item.cancelled||outcome?.manual)return;
-   if(outcome?.stopped)return update(source,data.enabled?'Aguardando o próximo lote':'Pausada · aguardando retomada');
-   source.lastKey=key;
-   source.done=!source.follow;
-   update(source,source.done?'Concluída': 'Aguardando a próxima live do canal',source.done?0:pollDelay);
+   if(!item.cancelled&&!outcome?.manual){
+    if(outcome?.stopped)update(source,data.enabled?'Aguardando o próximo lote':'Pausada · aguardando retomada');
+    else{
+     source.lastKey=key;
+     source.done=!source.follow;
+     update(source,source.done?'Concluída':'Aguardando a próxima live do canal',source.done?0:pollDelay);
+    }
+   }
+   return true;
   }catch(error){
-   if(item.cancelled)return;
-   const offline=/not currently live|not live right now|not live streaming|channel is offline|no live streams|não está ao vivo/i.test(error.message);
-   update(source,source.follow&&offline?'Canal offline · aguardando nova live':error.message,pollDelay);
+   if(!item.cancelled){
+    const offline=/not currently live|not live right now|not live streaming|channel is offline|no live streams|não está ao vivo/i.test(error.message);
+    update(source,offline?(source.follow?'Canal offline · aguardando nova live':'Canal offline · aguardando a live'):error.message,pollDelay);
+   }
+   return locked;
   }finally{
    if(locked)busyKeys.delete(key);
    active.delete(source.id);
   }
  }
+ function start(source){
+  const item={};
+  active.set(source.id,item);
+  return work(source,item).catch(error=>{console.error('Falha na fila contínua:',error.message);return true;});
+ }
  function tick({batch=false}={}){
   if(batchOnly&&!batch||!data.enabled||!connected())return;
+  if(batch&&batchWork)return batchWork;
   const available=data.sources.filter(s=>!s.done&&!active.has(s.id)&&(s.retryAt||0)<=Date.now())
    .sort((a,b)=>(batch?0:Number(!!b.vod||/twitch\.tv\/videos\//i.test(b.url))-Number(!!a.vod||/twitch\.tv\/videos\//i.test(a.url)))||(a.checkedAt||0)-(b.checkedAt||0));
-  const works=available.slice(0,Math.max(0,(batch?1:data.limit)-active.size)).map(source=>{
-   const item={};
-   active.set(source.id,item);
-   return work(source,item).catch(e=>console.error('Falha na fila contínua:',e.message));
-  });
-  if(batch)return Promise.all(works);
+  if(batch){
+   if(active.size)return;
+   batchWork=(async()=>{
+    for(const source of available.slice(0,batchSourceChecks)){
+     if(!data.enabled||!connected())break;
+     if(data.sources.includes(source)&&await start(source))break;
+    }
+   })().finally(()=>{batchWork=undefined;});
+   return batchWork;
+  }
+  if(!batchWork)available.slice(0,Math.max(0,data.limit-active.size)).forEach(start);
  }
  return {
   tick,

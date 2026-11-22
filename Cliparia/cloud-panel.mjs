@@ -6,7 +6,7 @@ const sourceStatuses=new Set([
  'Na fila','Verificando a fonte','Capturando live','Analisando VOD por trechos','Concluída','Pausada',
  'Aguardando a live começar','Aguardando o replay ficar disponível','Aguardando a próxima live do canal',
  'Esta transmissão já está em outra fonte da fila','Aguardando o próximo lote','Pausada · aguardando retomada',
- 'Canal offline · aguardando nova live','Clipagem parada','Clipagem parada · aguardando outra live',
+ 'Canal offline · aguardando nova live','Canal offline · aguardando a live','Clipagem parada','Clipagem parada · aguardando outra live',
 ]);
 
 function sourceLabel(value){

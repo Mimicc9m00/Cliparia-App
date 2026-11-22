@@ -1,4 +1,5 @@
 name: Cliparia · Executar lote na nuvem
+run-name: ${{ inputs.painel_somente && 'Cliparia · Sincronizar painel' || inputs.revisar_textos && 'Cliparia · Transcrever cortes recuperados' || 'Cliparia · Gerar e publicar' }}
 
 on:
   workflow_dispatch:

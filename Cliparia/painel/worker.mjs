@@ -143,7 +143,9 @@ async function dispatchScheduled(event,env){
   const recent=await fetch(endpoint+'/runs?per_page=10',{headers,redirect:'manual',signal:AbortSignal.timeout(12000)});
   if(!recent.ok)throw await githubFailure(recent,'A consulta aos lotes');
   const {workflow_runs:runs}=await recent.json();
-  if(runs.some(run=>run.status!=='completed'||Date.parse(run.created_at)>event.scheduledTime-12*60_000))return 'lote recente ou ativo';
+  const utilityTitles=['Cliparia · Sincronizar painel','Cliparia · Transcrever cortes recuperados'];
+  if(runs.some(run=>run.status!=='completed'||run.conclusion!=='skipped'&&!utilityTitles.includes(run.display_title)&&
+   Date.parse(run.created_at)>event.scheduledTime-12*60_000))return 'lote recente ou ativo';
   const dispatch=await fetch(endpoint+'/dispatches',{
    method:'POST',headers,body:JSON.stringify({ref:'main',inputs:{painel_somente:false}}),redirect:'manual',signal:AbortSignal.timeout(12000),
   });

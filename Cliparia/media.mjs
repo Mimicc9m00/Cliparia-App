@@ -121,7 +121,9 @@ async function encodeOnce(inputs,duration,mapping,visual,bytes,cwd,codec,signal)
  const encoded=Buffer.concat(parts,size);
  const timing=JSON.parse(await run('ffprobe',['-v','error','-select_streams','v:0','-show_entries','packet=pts_time,duration_time','-of','json','-i','pipe:0'],null,encoded,{signal}));
  const end=(timing.packets||[]).reduce((max,p)=>Math.max(max,Number(p.pts_time||0)+Number(p.duration_time||0)),0);
- if(end<minimum-.04||end<duration-.3)throw Error('A fonte terminou antes de completar a duração escolhida.');
+ if(end<minimum-.04||end<duration-.3){
+  throw Object.assign(Error('A fonte terminou antes de completar a duração escolhida.'),{reason:'clip_source_short'});
+ }
  return encoded;
 }
 export async function exportClip(job,src,start,len,speech){
@@ -365,7 +367,13 @@ export async function generate(job,dir,update,onClip,{knownMeta,shouldStop,signa
     update('Renderizando corte '+(i+1));
     const file='corte-'+String(i+1).padStart(2,'0')+'.mp4';
     const frame=['native','webcam-top-right'].includes(job.frame)?job.frame:'auto';
-    const bytes=await withInput(current=>exportClip({...job,frame},current,start,len,speech));
+    let bytes;
+    try{bytes=await withInput(current=>exportClip({...job,frame},current,start,len,speech));}
+    catch(error){
+     if(!exhaustive||error.reason!=='clip_source_short')throw error;
+     update('Trecho sem vídeo suficiente · procurando outro destaque');
+     continue;
+    }
     const contentHash=createHash('sha256').update(bytes).digest('hex');
     const visual=visualRange(metrics.visual,start,len);
     update('Verificando imagens e falas do corte '+(i+1));

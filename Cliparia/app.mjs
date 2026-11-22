@@ -318,7 +318,8 @@ async function start(b){
  }finally{starting=false;}
 }
 const continuous=createContinuous(path.join(dir,'continuo.json'),{
- sourceInfo,stop:stopLive,connected:()=>social.accounts().drive.connected,batchOnly:cloudBatch,
+ sourceInfo:url=>sourceInfo(url,undefined,cloudBatch?AbortSignal.timeout(30_000):undefined),stop:stopLive,
+ connected:()=>social.accounts().drive.connected,batchOnly:cloudBatch,
  launch(source,meta,key,item,shouldStop){
   const same=jobs.find(j=>j.continuousId===source.id&&j.mediaKey===key);
   const job=same||makeJob({...source.config,url:source.url,continuousId:source.id,mediaKey:key});
