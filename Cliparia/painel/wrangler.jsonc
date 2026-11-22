@@ -1,0 +1,12 @@
+{
+  "name": "cliparia-painel",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-21",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": { "GITHUB_REPOSITORY": "Mimicc9m00/Cliparia-App" },
+  "triggers": { "crons": ["12/15 * * * *"] },
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  "durable_objects": { "bindings": [{ "name": "PANEL", "class_name": "ClipariaPanel" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ClipariaPanel"] }]
+}

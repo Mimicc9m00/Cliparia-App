@@ -1,0 +1,44 @@
+name: Cliparia · Configurar destinos na nuvem
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: cliparia-state-single-writer
+  cancel-in-progress: false
+
+jobs:
+  configurar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLIPARIA_IMAGE: ${{ vars.CLIPARIA_CLOUD_IMAGE }}
+      CLIPARIA_VAULT_KEY: ${{ secrets.CLIPARIA_VAULT_KEY }}
+      CLIPARIA_CLOUD_FILE_ID: ${{ secrets.CLIPARIA_CLOUD_FILE_ID }}
+      CLIPARIA_CLOUD_DRIVE: ${{ secrets.CLIPARIA_CLOUD_DRIVE }}
+      CLIPARIA_FACEBOOK_TOKEN: ${{ secrets.CLIPARIA_FACEBOOK_TOKEN }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Obter configuração
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Ativar destinos autorizados
+        run: |
+          prefix="ghcr.io/${GITHUB_REPOSITORY,,}@sha256:"
+          digest="${CLIPARIA_IMAGE#"$prefix"}"
+          if [[ "$digest" == "$CLIPARIA_IMAGE" || ! "$digest" =~ ^[a-f0-9]{64}$ ]]; then
+            echo 'Configure o digest da imagem do Cliparia.'
+            exit 1
+          fi
+          config="$GITHUB_WORKSPACE/Cliparia/cloud-destinations.mjs"
+          [[ -f "$config" ]] || config="$GITHUB_WORKSPACE/cloud-destinations.mjs"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker run --rm --init \
+            --mount "type=bind,source=$config,target=/app/cloud-destinations.mjs,readonly" \
+            -e CLIPARIA_VAULT_KEY -e CLIPARIA_CLOUD_FILE_ID -e CLIPARIA_CLOUD_DRIVE -e CLIPARIA_FACEBOOK_TOKEN \
+            "$CLIPARIA_IMAGE" node cloud-destinations.mjs

@@ -1,0 +1,31 @@
+name: Cliparia · Preparar imagem para nuvem
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  imagem:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Obter código
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Publicar imagem
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          context=.
+          if [[ -f Cliparia/Dockerfile ]]; then
+            context=Cliparia
+          fi
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker build --build-arg CLIPARIA_BUILD_MODEL=1 \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --tag "$image:$GITHUB_SHA" "$context"
+          docker push "$image:$GITHUB_SHA"
+          docker image inspect --format '{{index .RepoDigests 0}}' "$image:$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

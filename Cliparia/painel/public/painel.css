@@ -1,0 +1,69 @@
+:root {
+ color-scheme: dark;
+ font: 16px/1.45 Inter, "Segoe UI", sans-serif;
+ background: #111314;
+ color: #f2f3ed;
+ --line: #39423a;
+ --panel: #1c211e;
+ --muted: #b5bcb4;
+ --accent: #c1f586;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input { font: inherit; }
+button, .link {
+ cursor: pointer;
+ min-height: 44px;
+ padding: .58rem .78rem;
+ border-radius: .55rem;
+ border: 1px solid var(--line);
+ background: #252b26;
+ color: inherit;
+ font-weight: 600;
+}
+button:hover, .link:hover { border-color: var(--accent); }
+button:disabled { cursor: default; opacity: .48; }
+button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.bar { display: flex; align-items: center; justify-content: space-between; padding: .75rem max(1.25rem, calc((100% - 60rem)/2)); border-bottom: 1px solid var(--line); }
+.bar strong { color: var(--accent); font-size: 1.45rem; letter-spacing: -.05em; }
+main { max-width: 62.5rem; padding: clamp(1.2rem, 5vw, 3rem) 1.25rem 4rem; margin: auto; }
+h1 { font-size: clamp(2.1rem, 6vw, 4.3rem); line-height: 1.05; letter-spacing: -.065em; margin: 0 0 1.35rem; }
+.summary, article { background: var(--panel); border: 1px solid var(--line); border-radius: .85rem; padding: 1rem; }
+.summary { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .8rem; }
+p { margin: .35rem 0 0; color: var(--muted); }
+#posting-countdown { color: var(--accent); font-variant-numeric: tabular-nums; font-weight: 600; }
+.notice { min-height: 2.1rem; margin: .5rem 0; color: var(--accent); }
+.notice[data-error="true"], .danger { color: #ffb7ac; }
+.batch-status { margin: -.6rem 0 .75rem; }
+.batch-status a { color: var(--accent); margin-left: .45rem; }
+nav, .filters, .actions, .destinations, .meta { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+nav { border-bottom: 1px solid var(--line); margin-bottom: .9rem; padding-bottom: .55rem; }
+.tab { background: transparent; border-color: transparent; }
+.tab span { margin-left: .28rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tab[aria-pressed="true"] { background: #303b2b; color: var(--accent); }
+.filters { align-items: end; margin-bottom: .9rem; }
+#posting-panel .summary { margin-bottom: .9rem; }
+.filters label { flex: 1; min-width: min(100%, 14rem); color: var(--muted); }
+input[type="search"] { display: block; margin-top: .3rem; width: 100%; min-height: 44px; padding: .6rem .75rem; background: #151917; color: inherit; border: 1px solid var(--line); border-radius: .55rem; }
+#clips { display: grid; gap: .7rem; }
+article { display: grid; gap: .65rem; }
+h2 { font-size: 1rem; margin: 0; overflow-wrap: anywhere; }
+.meta { font-size: .82rem; color: var(--muted); }
+.meta span+span::before { content: '·'; margin-right: .55rem; }
+.actions { align-items: start; }
+.link { display: inline-flex; align-items: center; text-decoration: none; }
+summary { cursor: pointer; min-height: 44px; display: list-item; width: fit-content; padding-block: .55rem; color: var(--accent); }
+.destinations { gap: .75rem; margin: .35rem 0; }
+.destinations label { display: flex; align-items: center; min-height: 44px; gap: .35rem; }
+input[type="checkbox"] { width: 1.2rem; height: 1.2rem; accent-color: var(--accent); }
+.primary { color: #172010; background: var(--accent); border-color: var(--accent); }
+#more { margin-top: 1rem; }
+.live-form { display: grid; gap: .7rem; background: var(--panel); border: 1px solid var(--line); border-radius: .85rem; padding: 1rem; }
+.live-form>button { justify-self: start; }
+.live-form input[type="url"], .live-form input[type="number"] { display: block; margin-top: .3rem; width: 100%; min-height: 44px; padding: .6rem .75rem; background: #151917; color: inherit; border: 1px solid var(--line); border-radius: .55rem; }
+.live-options { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem 1.1rem; }
+.live-options label:has(input[type="checkbox"]) { display: flex; align-items: center; min-height: 44px; gap: .35rem; }
+.live-heading { margin: 1.4rem 0 .65rem; }
+.live-heading h2 { font-size: 1.2rem; }
+#live-list { display: grid; gap: .7rem; }
+[hidden] { display: none !important; }

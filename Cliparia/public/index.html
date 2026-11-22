@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cliparia · Estúdio de cortes</title>
+<link rel="stylesheet" href="/style.css">
+<body>
+<header><div class="brand"><b class="mark" aria-hidden="true">◩</b> Cliparia</div><nav aria-label="Navegação principal"><button id="studio" class="tab active" aria-current="page">Estúdio</button><button id="continuous-tab" class="tab">Contínuo</button><button id="posting-tab" class="tab">Fila de postagem</button><button id="published-tab" class="tab">Publicados</button><button id="accounts" class="tab">Contas</button><button id="pair" class="tab">Celular</button></nav></header>
+<main>
+<p id="mobile-connection" class="mobile-connection" role="status" hidden></p>
+<section id="desk">
+<h1 id="desk-title">Estúdio de cortes</h1>
+<div id="studio-entry"><div class="panel input" id="studio-form">
+<div>
+<h2 id="form-title">Importar uma live ou VOD</h2>
+<p id="mode-info"></p>
+<form class="stack" id="new">
+<label>Link do YouTube, da Twitch ou da Kick<input id="url" type="url" required placeholder="https://..."></label>
+<div class="clip-settings">
+<label>Formato do vídeo<select id="frame">
+<option value="auto">Auto-Layout inteligente · 9:16</option>
+<option value="webcam-top-right">Vertical · webcam no canto superior direito</option>
+<option value="native">Proporção original</option>
+</select></label>
+<div class="row"><label><span id="count-label">Quantidade máxima</span><input id="count" type="number" min="5" max="20" value="5" required></label><label>Duração por corte (s)<input id="duration" type="number" min="40" max="180" value="60" required></label></div>
+</div>
+<label id="live-blocks-label" hidden><input type="checkbox" id="live-blocks"> Continuar gerando novos lotes após atingir a meta da live</label>
+<label id="follow-label" hidden><input type="checkbox" id="follow-source"> Acompanhar novas lives deste canal <small>(Twitch, Kick ou link de canal do YouTube terminado em /live)</small></label>
+<label><input type="checkbox" id="prevent-duplicates" checked disabled> Evitar cortes repetidos no Estúdio e no Contínuo</label>
+<details class="disclosure" id="transcription-settings"><summary>Legendas, texto e verificação de conteúdo</summary><div class="stack disclosure-body">
+<label><input type="checkbox" id="captions" checked> Gerar legendas automáticas</label>
+<div class="row"><label>Idioma da fala<select id="language"><option value="auto">Detectar</option><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option></select></label><button type="button" id="install-model">Instalar legendas locais</button></div>
+<p id="model-status" role="status"></p>
+<label><input type="checkbox" id="write-posts" checked> Criar título, descrição e hashtags automaticamente com as falas de cada clipe</label>
+<p>Usa o modelo de transcrição local, mesmo com as legendas no vídeo desativadas. Sem fala reconhecida, usa o contexto disponível da fonte.</p>
+<p>Os cortes passam por análise local de quadros e falas antes do envio. Indícios de nudez explícita ou conteúdo sexual bloqueiam o envio. A análise por amostragem pode falhar.</p>
+</div></details>
+<button class="action" id="submit-source">Gerar cortes</button>
+</form>
+</div>
+</div>
+</div>
+<div class="sectionhead"><h2 id="jobs-title">Suas lives e VODs</h2><span id="total"></span><button type="button" id="clear-studio" data-clear-history="studio" hidden>Limpar histórico</button></div>
+<div id="jobs"></div>
+</section>
+<section id="continuous" hidden>
+<h1>Modo contínuo</h1>
+<div id="continuous-controls">
+<div class="panel queue-panel">
+<div class="actions"><button class="action" id="continuous-toggle">Ativar modo contínuo</button><span id="continuous-state" role="status"></span></div>
+<label>Fontes simultâneas<select id="continuous-limit"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select></label>
+<form id="continuous-auto-queue" class="continuous-auto-queue">
+<h2>Adicionar à fila de postagem</h2>
+<label class="continuous-queue-toggle"><input type="checkbox" name="enabled"> Adicionar automaticamente os novos cortes aprovados</label>
+<fieldset class="destinations"><legend>Destinos dos cortes</legend>
+<div class="actions"><label><input type="checkbox" name="targets" value="youtube"> YouTube</label><label><input type="checkbox" name="targets" value="instagram"> Instagram</label><label><input type="checkbox" name="targets" value="tiktok"> TikTok</label><label><input type="checkbox" name="targets" value="facebook"> Facebook</label><label><input type="checkbox" name="targets" value="kwai"> Kwai</label></div>
+</fieldset>
+<p>Os novos cortes do Contínuo passam pela checagem de conteúdo. Os envios seguem as configurações da fila de postagem. O Facebook aceita cortes de até 90 segundos.</p>
+<div class="actions"><button type="submit">Salvar configuração</button><span id="continuous-auto-queue-state" role="status"></span></div>
+</form>
+</div>
+<div id="continuous-entry"></div>
+<h2>Fontes na fila</h2>
+<div id="continuous-sources"></div>
+</div>
+<div class="sectionhead"><h2>Cortes do modo contínuo</h2><span id="continuous-total"></span><button type="button" id="clear-continuous" data-clear-history="continuous" hidden>Limpar histórico</button></div>
+<div id="continuous-jobs"></div>
+</section>
+<section id="posting" hidden>
+<h1>Fila de postagem</h1>
+<div class="queue-overview">
+<section class="queue-next" aria-labelledby="queue-next-heading"><h2 id="queue-next-heading">Próximo corte automático</h2><p id="queue-next-title"></p><p id="queue-next-detail"></p></section>
+<dl class="queue-metrics" aria-label="Estado dos envios"><div><dt>Destinos pendentes</dt><dd id="queue-pending-count">0</dd></div><div><dt>Em andamento</dt><dd id="queue-sending-count">0</dd></div><div><dt>Precisam de atenção</dt><dd id="queue-attention-count">0</dd></div></dl>
+</div>
+<div class="panel queue-panel" id="posting-controls">
+<div class="actions"><button class="action" id="posting-toggle" type="button">Ativar postagem automática</button><button id="posting-configure" type="button">Configurar plataformas</button><button id="check-youtube-queue" type="button">Verificar YouTube</button></div>
+<p id="posting-state" role="status"></p>
+<p id="posting-countdown" role="timer" hidden></p>
+<details class="disclosure"><summary>Intervalo de publicação</summary><div class="disclosure-body">
+<form id="countdown-settings" class="actions"><label>Intervalo em minutos <input id="countdown-minutes" type="number" min="1" max="1440" step="1" value="15" required></label><button type="submit">Salvar intervalo</button><button type="button" id="restart-countdown">Reiniciar contagem</button><button type="button" id="clear-countdown">Zerar contagem</button></form>
+</div></details>
+</div>
+<div class="sectionhead"><h2>Cortes selecionados</h2><span id="posting-total"></span><button id="posting-shuffle" type="button" disabled>Embaralhar ordem</button></div>
+<div class="queue-filters">
+<label>Buscar na fila<input id="queue-search" type="search" placeholder="Título, hashtag ou transmissão"></label>
+<label>Situação<select id="queue-status-filter"><option value="all">Todas</option><option value="attention">Precisam de atenção</option><option value="waiting">Esperando envio</option><option value="sending">Em andamento</option><option value="manual">Etapa manual</option></select></label>
+<label>Plataforma<select id="queue-platform-filter"><option value="all">Todas</option><option value="youtube">YouTube</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="facebook">Facebook</option><option value="kwai">Kwai</option></select></label>
+</div>
+<ol id="posting-items" class="posting-list"></ol>
+<div id="posting-empty" class="empty">Escolha os cortes que quer postar nas abas Estúdio ou Contínuo.</div>
+</section>
+<section id="published" hidden>
+<div class="page-heading"><h1>Vídeos publicados</h1><button id="check-publications" type="button">Verificar publicações</button></div>
+<div id="published-clips"><div class="empty">Nenhuma publicação confirmada ainda.</div></div>
+</section>
+<section id="links" hidden>
+<h1>Contas conectadas</h1>
+<p>Conecte o Google Drive e as plataformas onde quer publicar.</p>
+<div id="providers"></div>
+<section class="panel backup-panel" aria-labelledby="backup-title">
+<div><h2 id="backup-title">Backup do Cliparia</h2><p>Guarde a fila, o histórico de publicações e o registro de cortes repetidos em um arquivo JSON.</p></div>
+<div class="actions"><a class="download" href="/api/backup" download>Baixar backup</a><button id="restore-backup" type="button">Restaurar backup</button></div>
+</section>
+</section>
+</main>
+<dialog id="modal"><button class="close" id="close" aria-label="Fechar">×</button><div id="dialogbody"></div></dialog>
+<aside id="toast" role="status" hidden></aside>
+</body><script type="module" src="/ui.js"></script>
+</html>

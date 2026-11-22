@@ -1,0 +1,16 @@
+android/
+tests/
+.git/
+.openai/
+.env
+.env.*
+*.tar.gz
+*.zip
+lives.json
+continuo.json
+publicacoes.json
+contas.dat*
+cortes-gerados.json
+lives.json.*
+cloud-secrets.json
+cloud-detached

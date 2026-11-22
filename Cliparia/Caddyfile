@@ -1,0 +1,22 @@
+{$CLIPARIA_DOMAIN} {
+	@reel {
+		method GET HEAD
+		path_regexp ^/reel-[A-Za-z0-9_-]{43}\.mp4$
+	}
+	handle @reel {
+		reverse_proxy cliparia:43871
+	}
+	@automation {
+		method POST
+		path /api/automation/continuous /api/automation/posting
+	}
+	handle @automation {
+		reverse_proxy cliparia:43871
+	}
+	handle {
+		basic_auth {
+			{$CLIPARIA_USER} {$CLIPARIA_PASSWORD_HASH}
+		}
+		reverse_proxy cliparia:43871
+	}
+}

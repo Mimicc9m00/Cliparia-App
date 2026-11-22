@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="color-scheme" content="dark">
+ <title>Cliparia · Painel</title>
+ <link rel="stylesheet" href="/painel.css">
+ <script src="/painel.js" defer></script>
+</head>
+<body>
+ <header class="bar"><strong>Cliparia</strong><button id="refresh" type="button">Atualizar</button></header>
+ <main>
+  <h1 id="view-title">Fila de postagem</h1>
+  <p class="batch-status"><span id="batch-status" role="status">Consultando o lote</span> <a id="batch-link" target="_blank" rel="noopener noreferrer" hidden>Ver lote</a></p>
+  <nav aria-label="Listas de cortes">
+   <button id="queue" class="tab" type="button" aria-pressed="true">Na fila <span id="queued-count"></span></button>
+   <button id="library" class="tab" type="button" aria-pressed="false">Biblioteca <span id="library-count"></span></button>
+   <button id="lives" class="tab" type="button" aria-controls="live-panel" aria-pressed="false">Lives</button>
+  </nav>
+  <p id="notice" class="notice" role="status" aria-live="polite"></p>
+  <section id="posting-panel">
+   <div class="summary">
+    <div>
+     <strong id="automation">Carregando</strong>
+     <p id="posting-countdown" role="timer" hidden></p>
+     <p id="last-sync">Consultando o último lote</p>
+    </div>
+    <button id="toggle" type="button" disabled>Pausar postagem</button>
+   </div>
+   <div class="filters">
+    <label for="search"><span>Buscar cortes</span><input id="search" type="search" placeholder="Buscar por título ou legenda"></label>
+    <button id="shuffle" type="button" disabled>Aleatorizar fila</button>
+   </div>
+   <div id="clips" aria-live="off"></div>
+   <button id="more" type="button" hidden>Mostrar mais cortes</button>
+  </section>
+  <section id="live-panel" hidden>
+   <form id="live-form" class="live-form">
+    <label for="live-url">Link da live ou do replay
+     <input id="live-url" name="url" type="url" placeholder="https://…" maxlength="2000" required aria-describedby="live-hint">
+    </label>
+    <p id="live-hint">YouTube, Twitch ou Kick. O Cliparia verifica a fonte no próximo lote.</p>
+    <div class="live-options">
+     <label for="live-duration">Duração do corte (segundos)
+      <input id="live-duration" name="duration" type="number" value="60" min="40" max="180" required>
+     </label>
+     <label><input name="captions" type="checkbox" checked> Gerar legendas</label>
+     <label><input name="follow" type="checkbox"> Acompanhar próximas lives deste canal</label>
+    </div>
+    <button id="add-live" type="submit" class="primary" disabled>Adicionar live</button>
+   </form>
+   <div class="live-heading"><h2>Fontes cadastradas</h2><p id="live-status"></p></div>
+   <div id="live-list"></div>
+  </section>
+ </main>
+</body>
+</html>

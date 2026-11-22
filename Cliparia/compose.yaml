@@ -1,0 +1,35 @@
+services:
+  cliparia:
+    build: .
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:43871/').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    environment:
+      CLIPARIA_PUBLIC_URL: https://${CLIPARIA_DOMAIN}
+      CLIPARIA_VAULT_KEY: ${CLIPARIA_VAULT_KEY:?defina uma chave}
+      CLIPARIA_AUTOMATION_TOKEN: ${CLIPARIA_AUTOMATION_TOKEN:-}
+    volumes:
+      - cliparia_data:/data
+    init: true
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      CLIPARIA_DOMAIN: ${CLIPARIA_DOMAIN:?defina o domínio}
+      CLIPARIA_USER: ${CLIPARIA_USER:?defina o usuário}
+      CLIPARIA_PASSWORD_HASH: ${CLIPARIA_PASSWORD_HASH:?defina o hash da senha}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  cliparia_data:
+  caddy_data:
+  caddy_config:

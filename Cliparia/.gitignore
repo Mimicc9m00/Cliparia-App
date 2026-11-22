@@ -1,0 +1,15 @@
+.env
+.env.*
+*.tar.gz
+*.zip
+contas.dat*
+cloud-secrets.json
+cloud-detached
+lives.json*
+continuo.json*
+publicacoes.json*
+cortes-gerados.json*
+
+/.video-edit-enquadramento/
+/.wrangler/
+/android/*.apk

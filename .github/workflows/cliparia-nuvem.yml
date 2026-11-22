@@ -1,0 +1,53 @@
+name: Cliparia · Executar lote na nuvem
+
+on:
+  workflow_dispatch:
+    inputs:
+      painel_somente:
+        description: Atualizar o painel sem gerar ou publicar vídeos
+        type: boolean
+        default: false
+      revisar_textos:
+        description: Transcrever os cortes recuperados da fila sem publicar vídeos
+        type: boolean
+        default: false
+  schedule:
+    - cron: '8/15 * * * *'
+
+permissions:
+  packages: read
+
+concurrency:
+  group: cliparia-state-single-writer
+  cancel-in-progress: false
+
+jobs:
+  lote:
+    if: ${{ vars.CLIPARIA_CLOUD_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLIPARIA_IMAGE: ${{ vars.CLIPARIA_CLOUD_IMAGE }}
+      CLIPARIA_VAULT_KEY: ${{ secrets.CLIPARIA_VAULT_KEY }}
+      CLIPARIA_CLOUD_FILE_ID: ${{ secrets.CLIPARIA_CLOUD_FILE_ID }}
+      CLIPARIA_CLOUD_DRIVE: ${{ secrets.CLIPARIA_CLOUD_DRIVE }}
+      CLIPARIA_PANEL_URL: ${{ vars.CLIPARIA_PANEL_URL }}
+      CLIPARIA_PANEL_TOKEN: ${{ secrets.CLIPARIA_PANEL_TOKEN }}
+      CLIPARIA_PANEL_SYNC_ONLY: ${{ inputs.painel_somente }}
+      CLIPARIA_CLOUD_COPY_ONLY: ${{ inputs.revisar_textos }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Processar um lote
+        run: |
+          prefix="ghcr.io/${GITHUB_REPOSITORY,,}@sha256:"
+          digest="${CLIPARIA_IMAGE#"$prefix"}"
+          if [[ "$digest" == "$CLIPARIA_IMAGE" || ! "$digest" =~ ^[a-f0-9]{64}$ ]]; then
+            echo 'Configure CLIPARIA_CLOUD_IMAGE com o digest da imagem deste repositório.'
+            exit 1
+          fi
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker run --rm --init \
+            -e CLIPARIA_VAULT_KEY -e CLIPARIA_CLOUD_FILE_ID -e CLIPARIA_CLOUD_DRIVE \
+            -e CLIPARIA_PANEL_URL -e CLIPARIA_PANEL_TOKEN -e CLIPARIA_PANEL_SYNC_ONLY \
+            -e CLIPARIA_CLOUD_COPY_ONLY \
+            "$CLIPARIA_IMAGE" node cloud-run.mjs
