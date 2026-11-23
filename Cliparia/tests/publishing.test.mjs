@@ -254,6 +254,11 @@ test('libera o intervalo antigo que foi reiniciado somente pela nova tentativa d
  assert.equal(env.open().canSend(j,next,true),true);
  await writeFile(env.file,JSON.stringify({...data,manuallyRestarted:true}));
  assert.equal(env.open().canSend(j,next,true),false);
+ data.cooldowns={tiktok:{channel:'profile',until:5_400_000}};
+ data.records[JSON.stringify([slot,'tiktok'])]={state:'Em processamento',mode:'inbox',id:'accepted',startedAt:5_401_000};
+ data.nextAt=9_013_000;
+ await writeFile(env.file,JSON.stringify(data));
+ assert.equal(env.open().canSend(j,next,true),true);
 });
 
 test('lembra publicações e prazo após reiniciar, limpar histórico e cadastrar outra fonte para o mesmo vídeo',async t=>{

@@ -85,14 +85,17 @@ export function createPublicationMemory(file,{now=Date.now}={}){
  for(const post of Object.values(data.records))migrated=clearLegacyYouTubeWait(post)||migrated;
  // Clear a legacy countdown only when it matches a later inbox retry and the original sends already had their interval.
  const slotTikTok=data.records[JSON.stringify([data.slot,'tiktok'])];
- if(!data.manuallyRestarted&&slotTikTok?.reason===inboxLimit&&data.nextAt>now()){
-  const retriedAt=slotTikTok.retryAt-inboxRetryDelay;
+ if(!data.manuallyRestarted&&data.nextAt>now()&&slotTikTok){
+  const waitingForSpace=slotTikTok.reason===inboxLimit;
+  const retryAllowedAt=data.cooldowns?.tiktok?.until;
+  const acceptedAfterWait=slotTikTok.mode==='inbox'&&slotTikTok.id&&retryAllowedAt&&slotTikTok.startedAt>=retryAllowedAt;
+  const retriedAt=waitingForSpace?slotTikTok.retryAt-inboxRetryDelay:acceptedAfterWait?slotTikTok.startedAt:0;
   const lastOtherSend=Math.max(0,...automaticPlatforms.filter(p=>p!=='tiktok').map(p=>{
    const post=data.records[JSON.stringify([data.slot,p])];
    return post?.state==='Publicado'?post.startedAt||0:0;
   }));
   const offset=data.nextAt-(retriedAt+interval());
-  if(lastOtherSend&&lastOtherSend+interval()<=retriedAt&&offset>=0&&offset<=5000){
+  if(retriedAt&&lastOtherSend&&lastOtherSend+interval()<=retriedAt&&offset>=0&&offset<=(waitingForSpace?5000:120_000)){
    data.nextAt=now();
    migrated=true;
   }
