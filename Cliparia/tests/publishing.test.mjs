@@ -218,6 +218,44 @@ test('TikTok espera a vaga, respeita a revisão autorizada e não repete uma ent
  assert.deepEqual(sent,[[0,'inbox'],[60,'inbox']]);
 });
 
+test('nova recusa da caixa de entrada do TikTok não atrasa o próximo corte do YouTube',async t=>{
+ const env=await setup(t),memory=env.open(),first=clip(0),next=clip(60),j=job('capped-inbox',[first,next]);
+ selectClips(memory,j.clips,['youtube','tiktok']);
+ memory.setAutomaticConfig('tiktok',{mode:'inbox',channel:'profile'});
+ first.posting.tiktokInbox={channel:'profile',revision:0};
+ const sent=[];
+ memory.reserve(j,first,'youtube',true);
+ first.posts.youtube={state:'Publicado',id:'published'};
+ first.posts.tiktok=memory.deferTikTokInbox(j,first,'profile');
+ memory.finish(j,first,true);
+ memory.remember([j]);
+ env.advance(60*60_000);
+ const tick=createAutoPublisher({jobs:[j],memory,editing:new Set(),save:()=>memory.remember([j]),fields:()=>({}),send:async(job,c,__,p)=>{
+  const reserved=memory.reserve(job,c,p,true);
+  sent.push([c.start,p]);
+  c.posts[p]=p==='tiktok'?memory.deferTikTokInbox(job,c,'profile'):{state:'Publicado',id:'next'};
+  if(reserved)memory.finish(job,c,true);
+  memory.remember([j]);
+ }});
+ await tick();
+ assert.deepEqual(sent,[[0,'tiktok'],[60,'youtube']]);
+ assert.equal(first.posts.tiktok.state,'Aguardando vaga no TikTok');
+});
+
+test('libera o intervalo antigo que foi reiniciado somente pela nova tentativa da caixa de entrada',async t=>{
+ const env=await setup(t),first=clip(0),next=clip(60),j=job('legacy-inbox',[first,next]);
+ const slot=publicationKey(j,first),retryAt=9_000_000;
+ const data={slot,intervalMinutes:60,nextAt:retryAt+1,records:{
+  [JSON.stringify([slot,'youtube'])]:{state:'Publicado',startedAt:1_000_000},
+  [JSON.stringify([slot,'tiktok'])]:{state:'Aguardando vaga no TikTok',reason:'spam_risk_too_many_pending_share',retryAt}
+ }};
+ env.advance(5_000_000);
+ await writeFile(env.file,JSON.stringify(data));
+ assert.equal(env.open().canSend(j,next,true),true);
+ await writeFile(env.file,JSON.stringify({...data,manuallyRestarted:true}));
+ assert.equal(env.open().canSend(j,next,true),false);
+});
+
 test('lembra publicações e prazo após reiniciar, limpar histórico e cadastrar outra fonte para o mesmo vídeo',async t=>{
  const env=await setup(t),memory=env.open(),first=job('first',[clip(0)]);
  memory.reserve(first,first.clips[0],'youtube');

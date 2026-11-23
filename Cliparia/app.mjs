@@ -693,7 +693,7 @@ async function publish(job,clip,file,p,b,canStart){
   clip.posts[p]={state:'Falhou',reason:'posting_text_blocked',detail:'Revise o título ou a legenda antes de enviar.'};save();
   fail('Envio bloqueado: indício de conteúdo sexual no título ou na legenda.');
  }
- publicationMemory.reserve(job,clip,p,!!canStart);
+ const reservedInterval=publicationMemory.reserve(job,clip,p,!!canStart);
  clip.posts[p]={state:'Enviando',...(tiktokMode?{mode:tiktokMode}:{})};save();
  let initiated=false;
  try{
@@ -717,7 +717,7 @@ async function publish(job,clip,file,p,b,canStart){
   clip.posts[p].state=initiated?(['tiktok','instagram','facebook'].includes(p)?'Em processamento':'Resultado incerto. Confira o canal.'):'Falhou';
   if(typeof e.reason==='string')clip.posts[p].reason=e.reason;
   clip.posts[p].detail=e.message;throw e;
- }finally{publicationMemory.finish(job,clip,!!canStart);save();}
+ }finally{if(reservedInterval)publicationMemory.finish(job,clip,!!canStart);save();}
  if(cloudBatch&&p==='instagram'&&clip.posts[p].uploadMode==='hosted'){
   await social.finishHostedInstagram(clip.posts[p].id,()=>sync(job,clip));
  }else if(cloudBatch)await sync(job,clip);

@@ -4,6 +4,7 @@ export const publicationInterval=15*60_000;
 export const automaticPlatforms=['youtube','instagram','facebook','tiktok'];
 export const publicationPlatforms=[...automaticPlatforms,'kwai'];
 const inboxLimit='spam_risk_too_many_pending_share';
+const inboxRetryDelay=60*60_000;
 export function tiktokInboxApproved(clip,config){
  const approval=clip.posting?.tiktokInbox;
  return config?.mode==='inbox'&&!!config.channel&&approval?.channel===config.channel&&approval.revision===(clip.revision||0);
@@ -82,6 +83,20 @@ export function createPublicationMemory(file,{now=Date.now}={}){
  let migrated=false;
  if(data.cooldowns&&Object.hasOwn(data.cooldowns,'youtube')){delete data.cooldowns.youtube;migrated=true;}
  for(const post of Object.values(data.records))migrated=clearLegacyYouTubeWait(post)||migrated;
+ // Clear a legacy countdown only when it matches a later inbox retry and the original sends already had their interval.
+ const slotTikTok=data.records[JSON.stringify([data.slot,'tiktok'])];
+ if(!data.manuallyRestarted&&slotTikTok?.reason===inboxLimit&&data.nextAt>now()){
+  const retriedAt=slotTikTok.retryAt-inboxRetryDelay;
+  const lastOtherSend=Math.max(0,...automaticPlatforms.filter(p=>p!=='tiktok').map(p=>{
+   const post=data.records[JSON.stringify([data.slot,p])];
+   return post?.state==='Publicado'?post.startedAt||0:0;
+  }));
+  const offset=data.nextAt-(retriedAt+interval());
+  if(lastOtherSend&&lastOtherSend+interval()<=retriedAt&&offset>=0&&offset<=5000){
+   data.nextAt=now();
+   migrated=true;
+  }
+ }
  if(migrated)save();
  function rememberPublished(key,platform,post,title,source){
   const entry=published[key];
@@ -128,7 +143,7 @@ export function createPublicationMemory(file,{now=Date.now}={}){
   tiktokInboxAt(channel){return data.cooldowns?.tiktok?.channel===channel?data.cooldowns.tiktok.until:0;},
   tiktokInboxReady(channel){return this.tiktokInboxAt(channel)<=now();},
   deferTikTokInbox(job,clip,channel){
-   const retryAt=now()+60*60_000;
+   const retryAt=now()+inboxRetryDelay;
    (data.cooldowns??={}).tiktok={channel,until:retryAt};
    const post={state:'Aguardando vaga no TikTok',mode:'inbox',account:channel,reason:inboxLimit,retryAt,detail:'Há vários envios pendentes no TikTok. Conclua os vídeos pela caixa de entrada para liberar espaço.'};
    data.records[keyFor(job,clip,'tiktok')]=post;save();
@@ -142,14 +157,17 @@ export function createPublicationMemory(file,{now=Date.now}={}){
   reserve(job,clip,platform,scheduled=false){
    if(!scheduled&&!job.continuousId&&!clip.posting)return;
    const key=publicationKey(job,clip);
-   if(timedPublication(job,clip,scheduled)){
-    if(!this.canSend(job,clip,scheduled))throw Error('Aguarde o intervalo de '+data.intervalMinutes+' minutos da fila de postagem. Próximo envio a partir de '+new Date(data.nextAt).toLocaleString('pt-BR')+'.');
+   const timed=timedPublication(job,clip,scheduled);
+   const inboxRetry=scheduled&&platform==='tiktok'&&clip.posts.tiktok?.reason===inboxLimit&&retryPending(clip.posts.tiktok);
+   if(timed&&!this.canSend(job,clip,scheduled))throw Error('Aguarde o intervalo de '+data.intervalMinutes+' minutos da fila de postagem. Próximo envio a partir de '+new Date(data.nextAt).toLocaleString('pt-BR')+'.');
+   if(timed&&!inboxRetry){
     if(data.slot!==key)delete data.manuallyRestarted;
     data.slot=key;
     if(!data.manuallyRestarted)data.nextAt=Math.max(data.nextAt,now()+interval());
    }
    data.records[keyFor(job,clip,platform)]={state:'Enviando',startedAt:now()};
    save(); // Persist before contacting a platform, including uncertain outcomes.
+   return timed&&!inboxRetry;
   },
   finish(job,clip,scheduled=false){
    if(timedPublication(job,clip,scheduled)&&!data.manuallyRestarted&&data.slot===publicationKey(job,clip)){
