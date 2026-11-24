@@ -36,6 +36,10 @@
    <button id="more" type="button" hidden>Mostrar mais cortes</button>
   </section>
   <section id="live-panel" hidden>
+   <div class="summary">
+    <strong id="live-status" role="status">Aguardando sincronização</strong>
+    <button id="toggle-generation" type="button" disabled>Pausar geração</button>
+   </div>
    <form id="live-form" class="live-form">
     <label for="live-url">Link da live ou do replay
      <input id="live-url" name="url" type="url" placeholder="https://…" maxlength="2000" required aria-describedby="live-hint">
@@ -50,7 +54,7 @@
     </div>
     <button id="add-live" type="submit" class="primary" disabled>Adicionar live</button>
    </form>
-   <div class="live-heading"><h2>Fontes cadastradas</h2><p id="live-status"></p></div>
+   <div class="live-heading"><h2>Fontes cadastradas</h2></div>
    <div id="live-list"></div>
   </section>
  </main>

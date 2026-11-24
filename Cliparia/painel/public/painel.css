@@ -42,7 +42,7 @@ nav { border-bottom: 1px solid var(--line); margin-bottom: .9rem; padding-bottom
 .tab span { margin-left: .28rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tab[aria-pressed="true"] { background: #303b2b; color: var(--accent); }
 .filters { align-items: end; margin-bottom: .9rem; }
-#posting-panel .summary { margin-bottom: .9rem; }
+.summary { margin-bottom: .9rem; }
 .filters label { flex: 1; min-width: min(100%, 14rem); color: var(--muted); }
 input[type="search"] { display: block; margin-top: .3rem; width: 100%; min-height: 44px; padding: .6rem .75rem; background: #151917; color: inherit; border: 1px solid var(--line); border-radius: .55rem; }
 #clips { display: grid; gap: .7rem; }

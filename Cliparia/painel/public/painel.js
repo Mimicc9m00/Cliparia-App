@@ -1,12 +1,13 @@
 const ui=Object.fromEntries(['refresh','automation','last-sync','toggle','notice','queue','queued-count','library','library-count','search','shuffle','clips','more',
- 'view-title','posting-panel','posting-countdown','lives','live-panel','live-form','live-status','live-list','add-live','batch-status','batch-link'].map(id=>[id,document.getElementById(id)]));
+ 'view-title','posting-panel','posting-countdown','lives','live-panel','live-form','live-status','toggle-generation','live-list','add-live','batch-status','batch-link'].map(id=>[id,document.getElementById(id)]));
 const labels={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok · finalizar no celular'};
-const resultLabels={select:'Destinos atualizados',remove:'Corte removido da fila',up:'Ordem atualizada',down:'Ordem atualizada',shuffle:'Fila aleatorizada',enabled:'Postagem automática atualizada','add-live':'Fonte cadastrada no Contínuo'};
+const resultLabels={select:'Destinos atualizados',remove:'Corte removido da fila',up:'Ordem atualizada',down:'Ordem atualizada',shuffle:'Fila aleatorizada',enabled:'Postagem automática atualizada','add-live':'Fonte cadastrada no Contínuo','generation-enabled':'Geração de clipes atualizada'};
 const copyLabels={pending:'Aguardando transcrição do Drive',retry:'Transcrição será tentada novamente','no-speech':'Sem fala reconhecida',sensitive:'Texto pendente de revisão de conteúdo'};
 const nativeDate=new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'});
 const postingHour=new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'America/Sao_Paulo'});
 const sent=new Set();
 let snapshot=null,pending=0,view='queue',limit=25,requestNumber=0,batch=null,checkingBatch=false;
+let generationChange;
 
 function node(tag,text,className){
  const item=document.createElement(tag);
@@ -33,7 +34,7 @@ async function send(command,control){
   if(!response.ok)throw Error(data.error||'O painel recusou a alteração.');
   sent.add(id);
   inform('Alteração recebida. O Cliparia aplica a mudança no próximo lote.');
-  return true;
+  return id;
  }catch(error){
   inform(error.message||'Não foi possível salvar a alteração.',true);
   return false;
@@ -112,6 +113,17 @@ function renderCountdown(){
  const time=String(minutes).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
  timer.textContent='Intervalo para um novo corte · '+time;
 }
+function renderGenerationControl(){
+ const generation=snapshot?.generation;
+ const control=ui['toggle-generation'];
+ control.disabled=!generation||!!generationChange;
+ control.textContent=generation?.enabled?'Pausar geração':'Retomar geração';
+ if(generationChange){
+  ui['live-status'].textContent=generationChange.enabled?'Retomada pendente para o próximo lote':'Pausa pendente para o próximo lote';
+ }else if(generation){
+  ui['live-status'].textContent=generation.enabled?(generation.autoQueue?'Geração ativa · Envio automático à fila ativo':'Geração ativa'):'Geração pausada';
+ }else ui['live-status'].textContent='Aguardando sincronização';
+}
 function render(){
  for(const name of ['queue','library','lives'])ui[name].setAttribute('aria-pressed',String(view===name));
  ui['view-title'].textContent={queue:'Fila de postagem',library:'Biblioteca de cortes',lives:'Lives e replays'}[view];
@@ -120,7 +132,7 @@ function render(){
  renderCountdown();
  const generation=snapshot?.generation;
  ui['add-live'].disabled=!generation;
- ui['live-status'].textContent=generation?(generation.enabled?'Geração ativa':'Geração pausada')+(generation.autoQueue?' · Envio automático à fila ativo':''):'Aguardando sincronização';
+ renderGenerationControl();
  ui['live-list'].replaceChildren(...(generation?.sources||[]).map(source=>{
   const item=node('article');
   item.append(node('h2',source.label),node('p',source.status),node('div',source.clips+' '+(source.clips===1?'corte':'cortes')+(source.follow?' · Acompanha o canal':''),'meta'));
@@ -155,6 +167,10 @@ async function refresh(force=false){
   const changed=force||data.snapshot?.updatedAt!==snapshot?.updatedAt||pending!==data.pending;
   snapshot=data.snapshot;pending=data.pending;
   if(!snapshot){inform('O primeiro lote ainda precisa sincronizar a fila.');render();return;}
+  if(generationChange&&(snapshot.generation?.enabled===generationChange.enabled||snapshot.results.some(result=>result.id===generationChange.id))){
+   generationChange=null;
+   renderGenerationControl();
+  }
   for(const result of snapshot.results){
    if(!sent.delete(result.id))continue;
    if(result.ok)inform(resultLabels[result.action]||'Alteração aplicada.');
@@ -192,6 +208,16 @@ async function refreshBatch(){
 }
 ui.refresh.addEventListener('click',()=>{void refresh(true);void refreshBatch();});
 ui.toggle.addEventListener('click',event=>send({action:'enabled',enabled:!snapshot.enabled},event.currentTarget));
+ui['toggle-generation'].addEventListener('click',async()=>{
+ if(!snapshot?.generation||generationChange)return;
+ const change={enabled:!snapshot.generation.enabled};
+ generationChange=change;
+ renderGenerationControl();
+ change.id=await send({action:'generation-enabled',enabled:change.enabled});
+ if(!change.id)generationChange=null;
+ renderGenerationControl();
+ if(change.id)void refresh(true);
+});
 ui.shuffle.addEventListener('click',event=>send({action:'shuffle'},event.currentTarget));
 for(const name of ['queue','library','lives'])ui[name].addEventListener('click',()=>{view=name;limit=25;render();});
 ui['live-form'].addEventListener('submit',async event=>{

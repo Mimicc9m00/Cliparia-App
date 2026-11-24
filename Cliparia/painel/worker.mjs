@@ -20,7 +20,7 @@ function commandFrom(value){
  if(!value||!/^[a-f0-9-]{36}$/i.test(value.id||''))return;
  const {id,action}=value;
  if(action==='shuffle')return {id,action};
- if(action==='enabled'&&typeof value.enabled==='boolean')return {id,action,enabled:value.enabled};
+ if((action==='enabled'||action==='generation-enabled')&&typeof value.enabled==='boolean')return {id,action,enabled:value.enabled};
  if(action==='add-live'){
   if(typeof value.url!=='string'||value.url.length>2000||!Number.isInteger(value.duration)||value.duration<40||value.duration>180||
    typeof value.follow!=='boolean'||typeof value.captions!=='boolean')return;

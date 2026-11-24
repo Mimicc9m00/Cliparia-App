@@ -771,7 +771,8 @@ server.listen(43871,process.env.CLIPARIA_BIND||'127.0.0.1',()=>{
     const resultsFile=path.join(dir,'panel-results.json');
     const results=fs.existsSync(resultsFile)?JSON.parse(fs.readFileSync(resultsFile,'utf8')):[];
     const commands=JSON.parse(fs.readFileSync(panelCommands,'utf8'));
-    const updated=await applyPanelCommands(commands,results,{jobs,memory:publicationMemory,changeSelection:changePostingSelection,addSource:addContinuousSource,save});
+    const updated=await applyPanelCommands(commands,results,{jobs,memory:publicationMemory,changeSelection:changePostingSelection,
+     addSource:addContinuousSource,setGenerationEnabled:continuous.setEnabled,save});
     fs.writeFileSync(resultsFile,JSON.stringify(updated));
     await checkpointCloudBatch();
    }

@@ -55,7 +55,7 @@ export function panelSnapshot(jobs,publications,results=[],continuous={}){
  };
 }
 
-export async function applyPanelCommands(commands,results,{jobs,memory,changeSelection,addSource,save}){
+export async function applyPanelCommands(commands,results,{jobs,memory,changeSelection,addSource,setGenerationEnabled,save}){
  const applied=new Set(results.map(result=>result.id));
  for(const command of commands){
   if(applied.has(command.id))continue;
@@ -64,6 +64,9 @@ export async function applyPanelCommands(commands,results,{jobs,memory,changeSel
   try{
    if(command.action==='add-live'){
     await addSource(command);
+   }else if(command.action==='generation-enabled'){
+    if(typeof command.enabled!=='boolean')throw Error();
+    setGenerationEnabled(command.enabled);
    }else if(command.action==='shuffle'){
     shufflePublications(publicationQueue(jobs));
     save();

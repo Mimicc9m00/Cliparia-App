@@ -52,6 +52,17 @@ test('cadastro de live reaproveita a fila do Contínuo e não duplica o comando'
  assert.deepEqual(results,[{id:'live',action:'add-live',ok:true,review:false}]);
 });
 
+test('o painel pausa e retoma apenas a geração de clipes',async()=>{
+ const changes=[];
+ const dependencies={jobs:[],setGenerationEnabled:enabled=>changes.push(enabled)};
+ const pause={id:'pause',action:'generation-enabled',enabled:false};
+ const resume={id:'resume',action:'generation-enabled',enabled:true};
+ const invalid={id:'invalid',action:'generation-enabled',enabled:'false'};
+ const results=await applyPanelCommands([pause,pause,resume,invalid],[],dependencies);
+ assert.deepEqual(changes,[false,true]);
+ assert.deepEqual(results.map(result=>result.ok),[true,true,false]);
+});
+
 test('o painel só coloca links HTTPS de plataformas suportadas na fila',async()=>{
  const inserted=[];
  const panel=new ClipariaPanel({storage:{sql:{exec(sql,...args){
@@ -64,6 +75,11 @@ test('o painel só coloca links HTTPS de plataformas suportadas na fila',async()
  assert.equal((await send('https://kick.com@example.com/canal')).status,400);
  assert.equal((await send('https://kick.com/canal')).status,202);
  assert.deepEqual(inserted,[{...command,url:'https://kick.com/canal'}]);
+ const pause={id:command.id,action:'generation-enabled',enabled:false};
+ const sendGeneration=enabled=>panel.fetch(new Request('https://panel.example/api/commands',{method:'POST',body:JSON.stringify({...pause,enabled})}));
+ assert.equal((await sendGeneration('false')).status,400);
+ assert.equal((await sendGeneration(false)).status,202);
+ assert.deepEqual(inserted.at(-1),pause);
 });
 
 test('status das lives mostra o progresso sem exportar consultas ou erros sensíveis',()=>{
