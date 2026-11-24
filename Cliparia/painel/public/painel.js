@@ -4,6 +4,7 @@ const labels={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok
 const resultLabels={select:'Destinos atualizados',remove:'Corte removido da fila',up:'Ordem atualizada',down:'Ordem atualizada',shuffle:'Fila aleatorizada',enabled:'Postagem automática atualizada','add-live':'Fonte cadastrada no Contínuo'};
 const copyLabels={pending:'Aguardando transcrição do Drive',retry:'Transcrição será tentada novamente','no-speech':'Sem fala reconhecida',sensitive:'Texto pendente de revisão de conteúdo'};
 const nativeDate=new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'});
+const postingHour=new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'America/Sao_Paulo'});
 const sent=new Set();
 let snapshot=null,pending=0,view='queue',limit=25,requestNumber=0,batch=null,checkingBatch=false;
 
@@ -99,7 +100,12 @@ function renderCountdown(){
  if(timer.hidden)return;
  const seconds=Math.ceil((snapshot.nextAt-Date.now())/1000);
  if(seconds<=0){
-  timer.textContent='Intervalo liberado · '+(batch?.status==='in_progress'?'Lote em andamento':'Aguardando o próximo lote');
+  timer.textContent=(snapshot.fixedHours?'Horário de postagem liberado':'Intervalo liberado')+' · '+(batch?.status==='in_progress'?'Lote em andamento':'Aguardando o próximo lote');
+  return;
+ }
+ if(snapshot.fixedHours){
+  const countdown=[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(value=>String(value).padStart(2,'0')).join(':');
+  timer.textContent='Próximo corte às '+postingHour.format(snapshot.nextAt)+' (Brasília) · '+countdown;
   return;
  }
  const minutes=Math.floor(seconds/60);

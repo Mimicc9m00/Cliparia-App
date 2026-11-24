@@ -99,6 +99,35 @@ test('salva o intervalo escolhido e reaplica uma contagem que já está ativa',a
  assert.equal(memory.restartCountdown().nextAt,1_300_000);
 });
 
+test('agenda um corte em cada horário de Brasília, com retomada e sem usar horários perdidos',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'cliparia-fixed-hours-'));
+ t.after(()=>rm(dir,{recursive:true,force:true}));
+ const file=path.join(dir,'publicacoes.json');
+ const instant=time=>Date.parse('2026-11-24T'+time+'Z');
+ let now=instant('02:57:00');
+ const open=()=>createPublicationMemory(file,{fixedHours:true,now:()=>now});
+ let memory=open();
+ const [first,second]=[clip(0),clip(60)],j=job('horarios',[first,second]);
+ assert.equal(memory.status().nextAt,instant('03:00:00'));
+ assert.equal(memory.canSend(j,first,true),false);
+ now=instant('03:02:00');
+ assert.equal(memory.canSend(j,first,true),true);
+ assert.equal(memory.reserve(j,first,'youtube',true),false);
+ assert.equal(memory.canSend(j,first,true),true);
+ assert.equal(memory.canSend(j,second,true),false);
+ memory=open();
+ assert.equal(memory.status().nextAt,instant('11:00:00'));
+ now=instant('04:00:00');
+ assert.equal(memory.canSend(j,first,true),false);
+ now=instant('11:31:00');
+ assert.equal(memory.canSend(j,second,true),false);
+ assert.equal(memory.status().nextAt,instant('19:00:00'));
+ now=instant('19:00:00');
+ assert.equal(memory.canSend(j,second,true),true);
+ memory.reserve(j,second,'instagram',true);
+ assert.equal(memory.status().nextAt,Date.parse('2026-11-25T03:00:00Z'));
+});
+
 test('reinicia os 15 minutos a partir do clique e preserva envios já confirmados',async t=>{
  const env=await setup(t),memory=env.open(),first=clip(0),next=clip(60),j=job('reset',[first,next]);
  memory.reserve(j,first,'youtube');

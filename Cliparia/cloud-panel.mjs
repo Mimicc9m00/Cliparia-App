@@ -1,4 +1,4 @@
-import {automaticPlatforms,awaitingPublication,publicationQueue,shufflePublications} from './publishing.mjs';
+import {automaticPlatforms,awaitingPublication,fixedPostingNextAt,publicationQueue,shufflePublications} from './publishing.mjs';
 import {captionWithoutTags} from './post-copy.mjs';
 import {needsRecoveredCopy} from './recovered-copy.mjs';
 
@@ -32,7 +32,8 @@ export function panelSnapshot(jobs,publications,results=[],continuous={}){
  const other=jobs.flatMap(job=>job.clips.flatMap((clip,index)=>!queued.has(clip)&&clip.drive&&!clip.drive.removed&&!clip.drive.trashed?[{job,clip,index}]:[]));
  return {
   updatedAt:Date.now(),enabled:publications.automatic?.enabled===true,
-  nextAt:Number.isSafeInteger(publications.nextAt)&&publications.nextAt>0?publications.nextAt:0,
+  nextAt:publications.fixedPosting?fixedPostingNextAt(publications.fixedPosting):Number.isSafeInteger(publications.nextAt)&&publications.nextAt>0?publications.nextAt:0,
+  fixedHours:!!publications.fixedPosting,
   platforms:automaticPlatforms.filter(platform=>publications.automatic?.configs?.[platform]),
   total:queue.length+other.length,results:results.slice(-12),
   generation:{enabled:continuous.enabled===true,autoQueue:continuous.autoQueue?.enabled===true,

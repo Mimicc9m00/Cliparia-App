@@ -36,7 +36,7 @@ social.openVault(dir);
 const history=openJobHistory(path.join(dir,'lives.json'));
 const {jobs}=history;
 const generationHistory=createGenerationHistory(path.join(dir,'cortes-gerados.json'),jobs);
-const publicationMemory=createPublicationMemory(path.join(dir,'publicacoes.json'));
+const publicationMemory=createPublicationMemory(path.join(dir,'publicacoes.json'),{fixedHours:cloudBatch});
 publicationMemory.remember(jobs);
 function save(){publicationMemory.remember(jobs);history.save();}
 async function checkpointCloudBatch(){
@@ -776,10 +776,10 @@ server.listen(43871,process.env.CLIPARIA_BIND||'127.0.0.1',()=>{
     await checkpointCloudBatch();
    }
    await tick();
+   await autoTick();
    await continuous.tick({batch:true});
    await backfillRecoveredCopy(120_000);
    await checkpointCloudBatch();
-   await autoTick();
    await tick();
    save();
   })().catch(error=>{console.error(error.message);process.exitCode=1;}).finally(()=>server.close());

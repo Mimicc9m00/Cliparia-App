@@ -5,6 +5,21 @@ export const automaticPlatforms=['youtube','instagram','facebook','tiktok'];
 export const publicationPlatforms=[...automaticPlatforms,'kwai'];
 const inboxLimit='spam_risk_too_many_pending_share';
 const inboxRetryDelay=60*60_000;
+const hour=60*60_000;
+const fixedPostingWindow=30*60_000;
+const brasiliaHour=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',hourCycle:'h23'});
+
+function postingHour(now,direction){
+ let at=Math.floor(now/hour)*hour+(direction===1?hour:0);
+ while(Number(brasiliaHour.format(at))%8!==0)at+=direction*hour;
+ return at;
+}
+
+export function fixedPostingNextAt(schedule,now=Date.now()){
+ const current=postingHour(now,-1);
+ if(schedule.from<=current&&schedule.slotAt!==current&&now<current+fixedPostingWindow)return current;
+ return Math.max(schedule.from,postingHour(now,1));
+}
 export function tiktokInboxApproved(clip,config){
  const approval=clip.posting?.tiktokInbox;
  return config?.mode==='inbox'&&!!config.channel&&approval?.channel===config.channel&&approval.revision===(clip.revision||0);
@@ -73,7 +88,7 @@ function publishedLink(platform,post){
  }
  return '';
 }
-export function createPublicationMemory(file,{now=Date.now}={}){
+export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={}){
  const data=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):{nextAt:0,slot:null,records:{}};
  data.intervalMinutes??=publicationInterval/60_000;
  data.automatic??={enabled:false,configs:{}};
@@ -81,6 +96,11 @@ export function createPublicationMemory(file,{now=Date.now}={}){
  const save=()=>{fs.writeFileSync(file+'.tmp',JSON.stringify(data));fs.renameSync(file+'.tmp',file);};
  const published=data.published??={};
  let migrated=false;
+ if(fixedHours&&!data.fixedPosting){
+  data.fixedPosting={from:postingHour(now(),1),slotAt:null};
+  migrated=true;
+ }
+ const fixedPosting=fixedHours?data.fixedPosting:null;
  if(data.cooldowns&&Object.hasOwn(data.cooldowns,'youtube')){delete data.cooldowns.youtube;migrated=true;}
  for(const post of Object.values(data.records))migrated=clearLegacyYouTubeWait(post)||migrated;
  // Clear a legacy countdown only when it matches a later inbox retry and the original sends already had their interval.
@@ -140,8 +160,18 @@ export function createPublicationMemory(file,{now=Date.now}={}){
    if(result.state==='Enviando')result.state=result.id?'Em processamento':'Resultado incerto. Confira o perfil.';
    return result;
   },
-  canSend(job,clip,scheduled=false){return !timedPublication(job,clip,scheduled)||now()>=data.nextAt||data.slot===publicationKey(job,clip);},
-  scheduledAt(job,clip){return data.slot===publicationKey(job,clip)?0:data.nextAt;},
+  canSend(job,clip,scheduled=false){
+   if(fixedPosting&&scheduled){
+    const time=now(),current=postingHour(time,-1);
+    return time<current+fixedPostingWindow&&fixedPosting.from<=current&&
+     (fixedPosting.slotAt!==current||data.slot===publicationKey(job,clip));
+   }
+   return !timedPublication(job,clip,scheduled)||now()>=data.nextAt||data.slot===publicationKey(job,clip);
+  },
+  scheduledAt(job,clip){
+   if(fixedPosting)return this.canSend(job,clip,true)?0:fixedPostingNextAt(fixedPosting,now());
+   return data.slot===publicationKey(job,clip)?0:data.nextAt;
+  },
   readyToSend(post){return !post||retryPending(post)&&(!post.retryAt||now()>=post.retryAt);},
   tiktokInboxAt(channel){return data.cooldowns?.tiktok?.channel===channel?data.cooldowns.tiktok.until:0;},
   tiktokInboxReady(channel){return this.tiktokInboxAt(channel)<=now();},
@@ -161,16 +191,18 @@ export function createPublicationMemory(file,{now=Date.now}={}){
    if(!scheduled&&!job.continuousId&&!clip.posting)return;
    const key=publicationKey(job,clip);
    const timed=timedPublication(job,clip,scheduled);
+   const fixed=scheduled&&fixedPosting;
    const inboxRetry=scheduled&&platform==='tiktok'&&clip.posts.tiktok?.reason===inboxLimit&&retryPending(clip.posts.tiktok);
-   if(timed&&!this.canSend(job,clip,scheduled))throw Error('Aguarde o intervalo de '+data.intervalMinutes+' minutos da fila de postagem. Próximo envio a partir de '+new Date(data.nextAt).toLocaleString('pt-BR')+'.');
+   if(timed&&!this.canSend(job,clip,scheduled))throw Error(fixed?'Aguarde o próximo horário de postagem.':'Aguarde o intervalo de '+data.intervalMinutes+' minutos da fila de postagem. Próximo envio a partir de '+new Date(data.nextAt).toLocaleString('pt-BR')+'.');
    if(timed&&!inboxRetry){
     if(data.slot!==key)delete data.manuallyRestarted;
     data.slot=key;
-    if(!data.manuallyRestarted)data.nextAt=Math.max(data.nextAt,now()+interval());
+    if(fixed)fixed.slotAt=postingHour(now(),-1);
+    else if(!data.manuallyRestarted)data.nextAt=Math.max(data.nextAt,now()+interval());
    }
    data.records[keyFor(job,clip,platform)]={state:'Enviando',startedAt:now()};
    save(); // Persist before contacting a platform, including uncertain outcomes.
-   return timed&&!inboxRetry;
+   return timed&&!inboxRetry&&!fixed;
   },
   finish(job,clip,scheduled=false){
    if(timedPublication(job,clip,scheduled)&&!data.manuallyRestarted&&data.slot===publicationKey(job,clip)){
@@ -238,7 +270,7 @@ export function createPublicationMemory(file,{now=Date.now}={}){
    if(changed)save();
   },
   publishedClips(){return Object.values(published).reverse();},
-  status(){return {intervalMinutes:data.intervalMinutes,nextAt:data.nextAt,remembered:Object.values(data.records).filter(p=>p.state==='Publicado').length};}
+  status(){return {intervalMinutes:data.intervalMinutes,nextAt:fixedPosting?fixedPostingNextAt(fixedPosting,now()):data.nextAt,remembered:Object.values(data.records).filter(p=>p.state==='Publicado').length};}
  };
 }
 
