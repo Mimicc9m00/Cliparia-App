@@ -1,5 +1,7 @@
-const ui=Object.fromEntries(['refresh','automation','last-sync','toggle','notice','queue','queued-count','library','library-count','search','shuffle','clips','more',
- 'view-title','posting-panel','posting-countdown','lives','live-panel','live-form','live-status','toggle-generation','live-list','add-live','batch-status','batch-link'].map(id=>[id,document.getElementById(id)]));
+const titles={queue:'Fila de postagem',overdue:'Envios pendentes há 48 h ou mais',library:'Biblioteca de cortes',lives:'Lives e replays'};
+const views=Object.keys(titles);
+const ui=Object.fromEntries([...views,'refresh','automation','last-sync','toggle','notice','queued-count','overdue-count','library-count','search','shuffle','clips','more',
+ 'view-title','posting-panel','posting-summary','posting-countdown','live-panel','live-form','live-status','toggle-generation','live-list','add-live','batch-status','batch-link'].map(id=>[id,document.getElementById(id)]));
 const labels={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok · finalizar no celular'};
 const resultLabels={select:'Destinos atualizados',remove:'Corte removido da fila',up:'Ordem atualizada',down:'Ordem atualizada',shuffle:'Fila aleatorizada',enabled:'Postagem automática atualizada','add-live':'Fonte cadastrada no Contínuo','generation-enabled':'Geração de clipes atualizada','trash-video':'Vídeo movido para a lixeira do Drive','restore-video':'Vídeo restaurado no Drive'};
 const copyLabels={pending:'Aguardando transcrição do Drive',retry:'Transcrição será tentada novamente','no-speech':'Sem fala reconhecida',sensitive:'Texto pendente de revisão de conteúdo'};
@@ -136,9 +138,10 @@ function renderGenerationControl(){
  }else ui['live-status'].textContent='Aguardando sincronização';
 }
 function render(){
- for(const name of ['queue','library','lives'])ui[name].setAttribute('aria-pressed',String(view===name));
- ui['view-title'].textContent={queue:'Fila de postagem',library:'Biblioteca de cortes',lives:'Lives e replays'}[view];
+ for(const name of views)ui[name].setAttribute('aria-pressed',String(view===name));
+ ui['view-title'].textContent=titles[view];
  ui['posting-panel'].hidden=view==='lives';
+ ui['posting-summary'].hidden=view==='overdue';
  ui['live-panel'].hidden=view!=='lives';
  renderCountdown();
  const generation=snapshot?.generation;
@@ -156,15 +159,20 @@ function render(){
  ui.toggle.disabled=!snapshot.enabled&&!snapshot.platforms.length;
  ui['last-sync'].textContent='Última atualização em '+nativeDate.format(snapshot.updatedAt)+(pending?' · Alterações pendentes: '+pending:'');
  const queue=snapshot.clips.filter(clip=>clip.queued);
+ const overdue=snapshot.clips.filter(clip=>clip.canTrash);
  const library=snapshot.clips.filter(clip=>!clip.queued);
  ui['queued-count'].textContent=queue.length;
+ ui['overdue-count'].textContent=overdue.length;
  ui['library-count'].textContent=library.length;
  ui.shuffle.disabled=queue.length<2;
  ui.shuffle.hidden=view!=='queue';
  const search=ui.search.value.trim().toLocaleLowerCase('pt-BR');
- const visible=(view==='queue'?queue:library).filter(clip=>!search||[clip.title,clip.description,...(clip.hashtags||[])].join(' ').toLocaleLowerCase('pt-BR').includes(search));
+ const visible=({queue,overdue,library}[view]||[]).filter(clip=>!search||[clip.title,clip.description,...(clip.hashtags||[])].join(' ').toLocaleLowerCase('pt-BR').includes(search));
  ui.clips.replaceChildren(...visible.slice(0,limit).map(clip=>card(clip,queue)));
- if(!visible.length)ui.clips.append(node('p',search?'Nenhum corte encontrado.':view==='queue'?'A fila está vazia.':'Nenhum corte disponível.'));
+ if(!visible.length&&view!=='lives'){
+  const empty={queue:'A fila está vazia.',overdue:'Nenhum envio pendente há 48 horas ou mais.',library:'Nenhum corte disponível.'};
+  ui.clips.append(node('p',search?'Nenhum corte encontrado.':empty[view]));
+ }
  ui.more.hidden=visible.length<=limit;
 }
 async function refresh(force=false){
@@ -232,7 +240,7 @@ ui['toggle-generation'].addEventListener('click',async()=>{
  if(change.id)void refresh(true);
 });
 ui.shuffle.addEventListener('click',event=>send({action:'shuffle'},event.currentTarget));
-for(const name of ['queue','library','lives'])ui[name].addEventListener('click',()=>{view=name;limit=25;render();});
+for(const name of views)ui[name].addEventListener('click',()=>{view=name;limit=25;render();});
 ui['live-form'].addEventListener('submit',async event=>{
  event.preventDefault();
  const data=new FormData(ui['live-form']);
