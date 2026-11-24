@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {read} from '../social.mjs';
+import {read,tiktokUploadChunks} from '../social.mjs';
+
+test('declara o tamanho completo quando o vídeo é enviado em uma única parte',()=>{
+ assert.deepEqual(tiktokUploadChunks(27_660_567),{step:27_660_567,count:1});
+ assert.deepEqual(tiktokUploadChunks(512),{step:512,count:1});
+ const part=16*1024*1024;
+ assert.deepEqual(tiktokUploadChunks(5*part+100),{step:part,count:5});
+});
 
 test('explica exigência de conta privada e SELF_ONLY sem tratar restrição como erro de login',async()=>{
  const code='unaudited_client_can_only_post_to_private_accounts';

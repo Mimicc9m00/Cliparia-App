@@ -137,6 +137,7 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
   if(!published[key]?.posts[platform])rememberPublished(key,platform,post);
  }
  const keyFor=(job,clip,platform)=>JSON.stringify([publicationKey(job,clip),platform]);
+ const publishedOn=(job,clip,platform)=>clip.posts[platform]?.state==='Publicado'||data.records[keyFor(job,clip,platform)]?.state==='Publicado';
  return {
   backup:()=>({records:data.records,published}),
   restore(records,entries){
@@ -172,6 +173,12 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
    if(fixedPosting)return this.canSend(job,clip,true)?0:fixedPostingNextAt(fixedPosting,now());
    return data.slot===publicationKey(job,clip)?0:data.nextAt;
   },
+  tiktokOnlyRemaining(job,clip){
+   if(!fixedPosting||!clip.posting?.targets.includes('tiktok'))return false;
+   if(fixedPosting.slotAt===postingHour(now(),-1)&&data.slot===publicationKey(job,clip))return false;
+   const otherTargets=clip.posting.targets.filter(p=>p!=='tiktok'&&automaticPlatforms.includes(p));
+   return otherTargets.length>0&&otherTargets.every(p=>publishedOn(job,clip,p));
+  },
   readyToSend(post){return !post||retryPending(post)&&(!post.retryAt||now()>=post.retryAt);},
   tiktokInboxAt(channel){return data.cooldowns?.tiktok?.channel===channel?data.cooldowns.tiktok.until:0;},
   tiktokInboxReady(channel){return this.tiktokInboxAt(channel)<=now();},
@@ -193,8 +200,9 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
    const timed=timedPublication(job,clip,scheduled);
    const fixed=scheduled&&fixedPosting;
    const inboxRetry=scheduled&&platform==='tiktok'&&clip.posts.tiktok?.reason===inboxLimit&&retryPending(clip.posts.tiktok);
+   const finishingTikTok=fixed&&platform==='tiktok'&&this.tiktokOnlyRemaining(job,clip);
    if(timed&&!this.canSend(job,clip,scheduled))throw Error(fixed?'Aguarde o próximo horário de postagem.':'Aguarde o intervalo de '+data.intervalMinutes+' minutos da fila de postagem. Próximo envio a partir de '+new Date(data.nextAt).toLocaleString('pt-BR')+'.');
-   if(timed&&!inboxRetry){
+   if(timed&&!inboxRetry&&!finishingTikTok){
     if(data.slot!==key)delete data.manuallyRestarted;
     data.slot=key;
     if(fixed)fixed.slotAt=postingHour(now(),-1);
@@ -328,7 +336,7 @@ export function createAutoPublisher({jobs,memory,editing,send,fields,save,platfo
   if(sending||!settings.enabled)return;
   sending=true;
   try{
-   let youtubeVerified;
+   let youtubeVerified,tiktokContinuationStarted=false;
    for(const {job,clip} of publicationQueue(jobs)){
     if(!jobs.includes(job)||!clipAvailable(job,clip)||editing.has(clip)||['blocked','error','checking'].includes(clip.safety?.status))continue;
     const selection=clip.posting;
@@ -344,6 +352,10 @@ export function createAutoPublisher({jobs,memory,editing,send,fields,save,platfo
      if(platform==='youtube'){
       youtubeVerified??=Promise.resolve().then(()=>verifyYouTube()).then(()=>true,error=>{onError(error);return false;});
       if(!await youtubeVerified||clip.posts.youtube||clip.youtubeReview?.candidates?.length||!canStart())continue;
+     }
+     if(platform==='tiktok'&&memory.tiktokOnlyRemaining(job,clip)){
+      if(tiktokContinuationStarted)continue;
+      tiktokContinuationStarted=true;
      }
      try{await send(job,clip,null,platform,{...config,...fields(platform,config,job,clip),consent:true},canStart);}
      catch(error){onError(error);}

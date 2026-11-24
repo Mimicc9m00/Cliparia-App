@@ -243,6 +243,12 @@ export async function creator(p){
  if(!j.items?.length)throw Error('Crie um canal no YouTube para enviar os cortes.');
  return {creator_nickname:j.items[0].snippet.title,channel_id:j.items[0].id,privacy_level_options:['private','unlisted','public']};
 }
+export function tiktokUploadChunks(size){
+ if(!Number.isSafeInteger(size)||size<1)throw Error('O arquivo do TikTok está vazio ou tem tamanho inválido.');
+ const preferredSize=16*1024*1024;
+ const step=size<2*preferredSize?size:preferredSize;
+ return {step,count:Math.floor(size/step)};
+}
 export async function publish(p,file,clip,b,onID){
  const local=typeof file==='string';
  const size=local?fs.statSync(file).size:file.size;
@@ -265,7 +271,7 @@ export async function publish(p,file,clip,b,onID){
   return {state:'Enviado',id:j.id};
  }
  if(!inbox&&clip.length>who.max_video_post_duration_sec)throw Error('O corte excede a duração permitida para essa conta.');
- const step=Math.min(size,16*1024*1024),count=Math.floor(size/step);
+ const {step,count}=tiktokUploadChunks(size);
  const {publish_id,upload_url}=await tik(inbox?'inbox/video/init':'video/init',{...(inbox?{}:{post_info:{title:b.title,privacy_level:b.privacy,disable_comment:who.comment_disabled||!b.comment,disable_duet:who.duet_disabled||!b.duet,disable_stitch:who.stitch_disabled||!b.stitch,brand_content_toggle:!!b.brand,brand_organic_toggle:!!b.own}}),source_info:{source:'FILE_UPLOAD',video_size:size,chunk_size:step,total_chunk_count:count}},tiktokMode,inbox?b.channel:undefined);
  onID(publish_id,{mode:tiktokMode});
  for(let i=0;i<count;i++){

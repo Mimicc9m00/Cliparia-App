@@ -128,6 +128,38 @@ test('agenda um corte em cada horário de Brasília, com retomada e sem usar hor
  assert.equal(memory.status().nextAt,Date.parse('2026-11-25T03:00:00Z'));
 });
 
+test('às 16h a tentativa pendente do TikTok deixa a vaga livre para um corte novo',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'cliparia-fixed-tiktok-'));
+ t.after(()=>rm(dir,{recursive:true,force:true}));
+ const file=path.join(dir,'publicacoes.json');
+ let now=Date.parse('2026-11-24T10:57:00Z');
+ const memory=createPublicationMemory(file,{fixedHours:true,now:()=>now});
+ const [old,next]=[clip(0),clip(60)],j=job('turno-tiktok',[old,next]);
+ selectClips(memory,j.clips,['youtube','instagram','facebook','tiktok']);
+ memory.setAutomaticConfig('tiktok',{mode:'inbox',channel:'profile'});
+ for(const c of j.clips)c.posting.tiktokInbox={channel:'profile',revision:0};
+ now=Date.parse('2026-11-24T11:01:00Z');
+ for(const p of ['youtube','instagram','facebook']){
+  memory.reserve(j,old,p,true);
+  old.posts[p]={state:'Publicado',id:'old-'+p};
+ }
+ memory.remember([j]);
+ now=Date.parse('2026-11-24T19:01:00Z');
+ const oldAttempt={...clip(120),posting:old.posting,posts:{...old.posts}};
+ memory.reserve(j,oldAttempt,'tiktok',true);
+ assert.equal(memory.canSend(j,next,true),true);
+ const sent=[];
+ const tick=createAutoPublisher({jobs:[j],memory,editing:new Set(),save:()=>memory.remember([j]),fields:()=>({}),send:async(job,c,__,p)=>{
+  sent.push([c.start,p]);
+  memory.reserve(job,c,p,true);
+  c.posts[p]=p==='tiktok'?{state:'Falhou',reason:'invalid_params'}:{state:'Publicado',id:'next-'+p};
+  memory.remember([j]);
+ }});
+ await tick();
+ assert.deepEqual(sent,[[0,'tiktok'],[60,'youtube'],[60,'instagram'],[60,'facebook'],[60,'tiktok']]);
+ assert.equal(memory.status().nextAt,Date.parse('2026-11-25T03:00:00Z'));
+});
+
 test('reinicia os 15 minutos a partir do clique e preserva envios já confirmados',async t=>{
  const env=await setup(t),memory=env.open(),first=clip(0),next=clip(60),j=job('reset',[first,next]);
  memory.reserve(j,first,'youtube');
