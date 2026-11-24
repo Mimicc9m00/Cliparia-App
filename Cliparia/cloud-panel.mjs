@@ -1,4 +1,4 @@
-import {automaticPlatforms,awaitingPublication,fixedPostingNextAt,publicationQueue,shufflePublications} from './publishing.mjs';
+import {automaticPlatforms,awaitingPublication,canTrashPendingClip,fixedPostingNextAt,publicationQueue,shufflePublications} from './publishing.mjs';
 import {captionWithoutTags} from './post-copy.mjs';
 import {needsRecoveredCopy} from './recovered-copy.mjs';
 
@@ -27,11 +27,12 @@ function panelCopy(clip){
 }
 
 export function panelSnapshot(jobs,publications,results=[],continuous={}){
+ const now=Date.now();
  const queue=publicationQueue(jobs);
  const queued=new Set(queue.map(({clip})=>clip));
- const other=jobs.flatMap(job=>job.clips.flatMap((clip,index)=>!queued.has(clip)&&clip.drive&&!clip.drive.removed&&!clip.drive.trashed?[{job,clip,index}]:[]));
+ const other=jobs.flatMap(job=>job.clips.flatMap((clip,index)=>!queued.has(clip)&&clip.drive?.id&&(!clip.drive.removed||clip.drive.trashed)?[{job,clip,index}]:[]));
  return {
-  updatedAt:Date.now(),enabled:publications.automatic?.enabled===true,
+  updatedAt:now,enabled:publications.automatic?.enabled===true,
   nextAt:publications.fixedPosting?fixedPostingNextAt(publications.fixedPosting):Number.isSafeInteger(publications.nextAt)&&publications.nextAt>0?publications.nextAt:0,
   fixedHours:!!publications.fixedPosting,
   platforms:automaticPlatforms.filter(platform=>publications.automatic?.configs?.[platform]),
@@ -51,11 +52,12 @@ export function panelSnapshot(jobs,publications,results=[],continuous={}){
    targets:clip.posting?.targets?.filter(platform=>automaticPlatforms.includes(platform))||[],
    posts:Object.fromEntries(automaticPlatforms.filter(platform=>clip.posts[platform]?.state).map(platform=>[platform,clip.posts[platform].state])),
    safety:clip.safety?.status||'',drive:!clip.drive?.removed&&!clip.drive?.trashed&&/^[\w-]{5,200}$/.test(clip.drive?.id||'')?clip.drive.id:'',
+   ...(clip.drive?.trashed?{trashed:true}:canTrashPendingClip(job,clip,publications.records,now)?{canTrash:true}:{}),
   })),
  };
 }
 
-export async function applyPanelCommands(commands,results,{jobs,memory,changeSelection,addSource,setGenerationEnabled,save}){
+export async function applyPanelCommands(commands,results,{jobs,memory,changeSelection,addSource,setGenerationEnabled,changeTrash,save}){
  const applied=new Set(results.map(result=>result.id));
  for(const command of commands){
   if(applied.has(command.id))continue;
@@ -73,6 +75,9 @@ export async function applyPanelCommands(commands,results,{jobs,memory,changeSel
    }else if(command.action==='enabled'){
     if(typeof command.enabled!=='boolean'||command.enabled&&!Object.keys(memory.automaticSettings().configs).length)throw Error();
     memory.setAutomaticEnabled(command.enabled);
+   }else if(command.action==='trash-video'||command.action==='restore-video'){
+    if(command.consent!==true)throw Error();
+    await changeTrash(command,command.action==='trash-video');
    }else if(command.action==='select'||command.action==='remove'){
     const configs=memory.automaticSettings().configs;
     if(command.action==='select'&&(!Array.isArray(command.targets)||command.targets.some(p=>!automaticPlatforms.includes(p)||!configs[p])))throw Error();

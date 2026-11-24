@@ -349,9 +349,9 @@ async function trim(b){
   save();
  }finally{editing.delete(clip);void autoTick();}
 }
-async function changeDriveTrash(b,trashed){
+async function changeDriveTrash(b,trashed,fromCloudPanel=false){
  if(!Number.isInteger(b.index)||b.index<0)fail('Informe o corte.');
- const {clip}=findClip(b.job,b.index);
+ const {job,clip}=findClip(b.job,b.index);
  checkRevision(clip,b.revision);
  if(b.consent!==true)fail(trashed?'Confirme que deseja mover o vídeo para a lixeira do Drive.':'Confirme que deseja restaurar o vídeo do Drive.');
  if(!clip.drive?.id)fail('Este corte não está salvo no Drive.');
@@ -360,6 +360,7 @@ async function changeDriveTrash(b,trashed){
   fail('Aguarde o ajuste, a verificação ou o envio em andamento neste corte.');
  }
  if(!!clip.drive.trashed===trashed)return;
+ if(trashed&&fromCloudPanel&&!publicationMemory.canTrashPending(job,clip))fail('O corte precisa ter um envio pendente há 48 horas para ser movido pelo painel.');
  editing.add(clip);
  try{
   await drive.setTrashed(clip.drive.id,trashed);
@@ -369,6 +370,7 @@ async function changeDriveTrash(b,trashed){
   }else{
    delete clip.drive.removed;
    delete clip.drive.trashed;
+   if(fromCloudPanel)clip.preserveDrive=true;
   }
   delete clip.syncError;
   save();
@@ -772,7 +774,8 @@ server.listen(43871,process.env.CLIPARIA_BIND||'127.0.0.1',()=>{
     const results=fs.existsSync(resultsFile)?JSON.parse(fs.readFileSync(resultsFile,'utf8')):[];
     const commands=JSON.parse(fs.readFileSync(panelCommands,'utf8'));
     const updated=await applyPanelCommands(commands,results,{jobs,memory:publicationMemory,changeSelection:changePostingSelection,
-     addSource:addContinuousSource,setGenerationEnabled:continuous.setEnabled,save});
+     addSource:addContinuousSource,setGenerationEnabled:continuous.setEnabled,
+     changeTrash:(command,trashed)=>changeDriveTrash(command,trashed,true),save});
     fs.writeFileSync(resultsFile,JSON.stringify(updated));
     await checkpointCloudBatch();
    }

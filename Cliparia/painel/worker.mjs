@@ -29,9 +29,10 @@ function commandFrom(value){
    !['youtube.com','www.youtube.com','m.youtube.com','youtu.be','twitch.tv','www.twitch.tv','kick.com','www.kick.com'].includes(url.hostname))return;
   return {id,action,url:url.href,duration:value.duration,follow:value.follow,captions:value.captions};
  }
- if(!['select','remove','up','down'].includes(action)||typeof value.job!=='string'||!value.job||value.job.length>140||
+ if(!['select','remove','up','down','trash-video','restore-video'].includes(action)||typeof value.job!=='string'||!value.job||value.job.length>140||
   !Number.isSafeInteger(value.index)||value.index<0||!Number.isSafeInteger(value.revision)||value.revision<0)return;
  const command={id,action,job:value.job,index:value.index,revision:value.revision};
+ if(action==='trash-video'||action==='restore-video')return value.consent===true?{...command,consent:true}:undefined;
  if(action!=='select')return command;
  if(!Array.isArray(value.targets)||!value.targets.length||value.targets.length>platforms.length||value.targets.some(p=>!platforms.includes(p)))return;
  return {...command,targets:[...new Set(value.targets)]};

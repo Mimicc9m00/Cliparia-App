@@ -1,14 +1,13 @@
 import {postStatus,youtubeStatus,instagramStatus,instagramAvailable,instagramReconnectRequired,facebookStatus} from './social.mjs';
 import {remove} from './drive.mjs';
-import {clipTargets} from './publishing.mjs';
+import {clipTargets,pendingPublication} from './publishing.mjs';
 const platforms=['youtube','tiktok','instagram','facebook'];
-const pending=post=>post?.id&&['Enviado','Em processamento','Abra a caixa de entrada do TikTok','Confirmação pendente'].includes(post.state);
-export const hasPendingPublication=clip=>platforms.some(p=>pending(clip.posts[p]));
+export const hasPendingPublication=clip=>platforms.some(p=>pendingPublication(clip.posts[p]));
 export const tiktokInboxNotified=post=>!!post?.id&&post.state==='Abra a caixa de entrada do TikTok';
 const tiktokChecks=new WeakMap();
 export async function refreshTikTok(clip,save,status=postStatus){
  const post=clip.posts.tiktok;
- if(!pending(post))throw Error('Não há uma entrega do TikTok aguardando confirmação neste corte.');
+ if(!pendingPublication(post))throw Error('Não há uma entrega do TikTok aguardando confirmação neste corte.');
  const existing=tiktokChecks.get(post);
  if(existing)return existing;
  const work=(async()=>{
@@ -27,7 +26,7 @@ export async function reconcile(job,clip,save,services={youtube:youtubeStatus,ti
  let firstError;
  for(const p of platforms){
   const post=clip.posts[p];
-  if(!pending(post)||p==='instagram'&&services.instagramAvailable?.()===false)continue;
+  if(!pendingPublication(post)||p==='instagram'&&services.instagramAvailable?.()===false)continue;
   try{
    if(p==='tiktok'){await refreshTikTok(clip,save,services[p]);continue;}
    clip.posts[p]=['instagram','facebook'].includes(p)?await services[p](post,save,!hasDriveFile||post.restoreStatusOnly===true):await services[p](post.id);

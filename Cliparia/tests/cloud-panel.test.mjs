@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyPanelCommands,panelSnapshot} from '../cloud-panel.mjs';
 import worker,{ClipariaPanel} from '../painel/worker.mjs';
+import {publicationKey} from '../publishing.mjs';
 
 const clip=(order)=>({title:'Corte',length:60,revision:2,drive:{id:'drive-file',accessToken:'private'},
  posting:{order,targets:['youtube']},posts:{youtube:{state:'Falhou',detail:'private',id:'private'}}});
@@ -63,6 +64,38 @@ test('o painel pausa e retoma apenas a geração de clipes',async()=>{
  assert.deepEqual(results.map(result=>result.ok),[true,true,false]);
 });
 
+test('a fila libera a lixeira após 48 horas de envio pendente e permite restaurar na biblioteca',t=>{
+ const now=Date.parse('2026-11-24T19:00:00Z');
+ t.mock.method(Date,'now',()=>now);
+ const video={...clip(1),posting:{order:1,targets:['youtube','tiktok']},posts:{tiktok:{state:'Abra a caixa de entrada do TikTok',id:'receipt'}}};
+ const job={id:'job',clips:[video]};
+ const key=JSON.stringify([publicationKey(job,video),'tiktok']);
+ const records={[key]:{id:'receipt',startedAt:now-48*60*60_000+1}};
+ assert.equal(panelSnapshot([job],{records}).clips[0].canTrash,undefined);
+ records[key].startedAt--;
+ assert.equal(panelSnapshot([job],{records}).clips[0].canTrash,true);
+ video.posts.youtube={state:'Enviando'};
+ assert.equal(panelSnapshot([job],{records}).clips[0].canTrash,undefined);
+ delete video.posts.youtube;
+ delete video.posting.order;
+ video.drive={...video.drive,removed:true,trashed:true};
+ const restored=panelSnapshot([job],{records}).clips[0];
+ assert.equal(restored.trashed,true);
+ assert.equal(restored.drive,'');
+ assert.equal(restored.canTrash,undefined);
+});
+
+test('o lote exige confirmação explícita e cada comando de lixeira é aplicado uma vez',async()=>{
+ const acted=[];
+ const deps={jobs:[],changeTrash:(command,trashed)=>acted.push([command.index,trashed])};
+ const trash={id:'trash',action:'trash-video',index:2,consent:true};
+ const restore={id:'restore',action:'restore-video',index:2,consent:true};
+ const unconfirmed={id:'unconfirmed',action:'trash-video',index:3};
+ const results=await applyPanelCommands([trash,trash,unconfirmed,restore],[],deps);
+ assert.deepEqual(acted,[[2,true],[2,false]]);
+ assert.deepEqual(results.map(result=>result.ok),[true,false,true]);
+});
+
 test('o painel só coloca links HTTPS de plataformas suportadas na fila',async()=>{
  const inserted=[];
  const panel=new ClipariaPanel({storage:{sql:{exec(sql,...args){
@@ -80,6 +113,11 @@ test('o painel só coloca links HTTPS de plataformas suportadas na fila',async()
  assert.equal((await sendGeneration('false')).status,400);
  assert.equal((await sendGeneration(false)).status,202);
  assert.deepEqual(inserted.at(-1),pause);
+ const trash={id:command.id,action:'trash-video',job:'job',index:0,revision:1};
+ const sendTrash=consent=>panel.fetch(new Request('https://panel.example/api/commands',{method:'POST',body:JSON.stringify({...trash,consent})}));
+ assert.equal((await sendTrash(false)).status,400);
+ assert.equal((await sendTrash(true)).status,202);
+ assert.deepEqual(inserted.at(-1),{...trash,consent:true});
 });
 
 test('status das lives mostra o progresso sem exportar consultas ou erros sensíveis',()=>{

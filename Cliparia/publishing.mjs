@@ -7,6 +7,7 @@ const inboxLimit='spam_risk_too_many_pending_share';
 const inboxRetryDelay=60*60_000;
 const hour=60*60_000;
 const fixedPostingWindow=30*60_000;
+const pendingTrashDelay=48*hour;
 const brasiliaHour=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',hourCycle:'h23'});
 
 function postingHour(now,direction){
@@ -78,6 +79,22 @@ export function publicationKey(job,clip){
  const source=job.mediaKey||(job.sourcePlatform&&job.mediaId?job.sourcePlatform+':'+job.mediaId:job.url||job.id);
  const normalized=source.replace(/^([^:]+):/,(_,provider)=>provider.toLowerCase()+':');
  return JSON.stringify([normalized,clip.originalStart??clip.start,clip.originalLength??clip.length]);
+}
+export function pendingPublication(post){
+ return !!post?.id&&['Enviado','Em processamento','Abra a caixa de entrada do TikTok','Confirmação pendente'].includes(post.state);
+}
+export function canTrashPendingClip(job,clip,records,now=Date.now()){
+ if(!clip.drive?.id||clip.drive.removed||clip.drive.trashed)return false;
+ if(Object.values(clip.posts).some(post=>post?.state==='Enviando'))return false;
+ const key=publicationKey(job,clip);
+ return clipTargets(job,clip).some(platform=>{
+  const post=clip.posts[platform];
+  if(!pendingPublication(post))return false;
+  const record=records?.[JSON.stringify([key,platform])];
+  if(record?.state==='Publicado')return false;
+  const startedAt=record?.id===post.id?record.startedAt:post.startedAt;
+  return Number.isSafeInteger(startedAt)&&startedAt>0&&now-startedAt>=pendingTrashDelay;
+ });
 }
 function publishedLink(platform,post){
  if(platform==='youtube'&&/^[\w-]{11}$/.test(post.id||''))return 'https://www.youtube.com/watch?v='+post.id;
@@ -161,6 +178,7 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
    if(result.state==='Enviando')result.state=result.id?'Em processamento':'Resultado incerto. Confira o perfil.';
    return result;
   },
+  canTrashPending(job,clip){return canTrashPendingClip(job,clip,data.records,now());},
   canSend(job,clip,scheduled=false){
    if(fixedPosting&&scheduled){
     const time=now(),current=postingHour(time,-1);

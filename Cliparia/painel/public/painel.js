@@ -1,7 +1,7 @@
 const ui=Object.fromEntries(['refresh','automation','last-sync','toggle','notice','queue','queued-count','library','library-count','search','shuffle','clips','more',
  'view-title','posting-panel','posting-countdown','lives','live-panel','live-form','live-status','toggle-generation','live-list','add-live','batch-status','batch-link'].map(id=>[id,document.getElementById(id)]));
 const labels={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok · finalizar no celular'};
-const resultLabels={select:'Destinos atualizados',remove:'Corte removido da fila',up:'Ordem atualizada',down:'Ordem atualizada',shuffle:'Fila aleatorizada',enabled:'Postagem automática atualizada','add-live':'Fonte cadastrada no Contínuo','generation-enabled':'Geração de clipes atualizada'};
+const resultLabels={select:'Destinos atualizados',remove:'Corte removido da fila',up:'Ordem atualizada',down:'Ordem atualizada',shuffle:'Fila aleatorizada',enabled:'Postagem automática atualizada','add-live':'Fonte cadastrada no Contínuo','generation-enabled':'Geração de clipes atualizada','trash-video':'Vídeo movido para a lixeira do Drive','restore-video':'Vídeo restaurado no Drive'};
 const copyLabels={pending:'Aguardando transcrição do Drive',retry:'Transcrição será tentada novamente','no-speech':'Sem fala reconhecida',sensitive:'Texto pendente de revisão de conteúdo'};
 const nativeDate=new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'});
 const postingHour=new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'America/Sao_Paulo'});
@@ -48,6 +48,7 @@ function card(clip,queue){
  if(copyLabels[clip.copyRecovery])meta.append(node('span',copyLabels[clip.copyRecovery]));
  if(clip.seconds)meta.append(node('span',clip.seconds+' s'));
  if(clip.safety==='blocked')meta.append(node('span','Conteúdo bloqueado','danger'));
+ if(clip.trashed)meta.append(node('span','Na lixeira do Drive'));
  for(const state of posting)meta.append(node('span',state));
  item.append(node('h2',clip.title),meta);
  if(clip.description)item.append(node('p',clip.description));
@@ -64,6 +65,16 @@ function card(clip,queue){
   link.target='_blank';link.rel='noopener noreferrer';controls.append(link);
  }
  const target={job:clip.job,index:clip.index,revision:clip.revision};
+ if(clip.canTrash||clip.trashed){
+  const trashed=clip.trashed===true;
+  const action=trashed?'restore-video':'trash-video';
+  const label=trashed?'Restaurar vídeo':'Mover vídeo para a lixeira';
+  const prompt=trashed?'Restaurar o arquivo no Drive? Os envios ainda elegíveis poderão ser retomados.':
+   'Este corte tem envio pendente há pelo menos 48 horas. Ao mover o arquivo para a lixeira do Drive, os destinos que ainda precisam do vídeo ficarão aguardando a restauração. Continuar?';
+  controls.append(button(label,event=>{
+   if(window.confirm(prompt))void send({action,...target,consent:true},event.currentTarget);
+  }));
+ }
  if(clip.queued){
   const position=queue.indexOf(clip);
   const up=button('Subir',event=>send({action:'up',...target},event.currentTarget));
@@ -175,6 +186,8 @@ async function refresh(force=false){
    if(!sent.delete(result.id))continue;
    if(result.ok)inform(resultLabels[result.action]||'Alteração aplicada.');
    else if(result.action==='add-live')inform('O Cliparia recusou a fonte. Confira se o link já está cadastrado e use um link de canal ao marcar o acompanhamento.',true);
+   else if(result.action==='trash-video')inform('Não foi possível mover o vídeo. Confira se ele ainda aguarda confirmação há 48 horas e está disponível no Drive.',true);
+   else if(result.action==='restore-video')inform('Não foi possível restaurar o vídeo. Confira se ele ainda está na lixeira do Drive.',true);
    else inform(result.review?'O corte não entrou na fila. Confira a verificação de conteúdo.':'O Cliparia recusou a alteração. Atualize a seleção e tente novamente.',true);
   }
   if(changed)render();
