@@ -1,5 +1,5 @@
 name: Cliparia · Executar lote na nuvem
-run-name: Cliparia · Recuperar postagem das 16h
+run-name: Cliparia · Completar envio das 16h ao YouTube
 
 on:
   workflow_dispatch:

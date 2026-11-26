@@ -120,7 +120,7 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false,reco
  const fixedPosting=fixedHours?data.fixedPosting:null;
  const recoveryAt=Date.parse(recoverPostingAt);
  const recoveryAvailable=recoverPostingAt&&fixedPosting&&recoveryAt===postingHour(now(),-1)&&
-  fixedPosting.from<=recoveryAt&&!(fixedPosting.slotAt>=recoveryAt);
+  fixedPosting.from<=recoveryAt&&fixedPosting.slotAt===recoveryAt&&!!data.slot;
  if(data.cooldowns&&Object.hasOwn(data.cooldowns,'youtube')){delete data.cooldowns.youtube;migrated=true;}
  for(const post of Object.values(data.records))migrated=clearLegacyYouTubeWait(post)||migrated;
  // Clear a legacy countdown only when it matches a later inbox retry and the original sends already had their interval.
@@ -186,8 +186,8 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false,reco
   canSend(job,clip,scheduled=false){
    if(fixedPosting&&scheduled){
     const time=now(),current=postingHour(time,-1);
-    if(recoverPostingAt&&(!recoveryAvailable||current!==recoveryAt))return false;
-    return (recoveryAvailable||time<current+fixedPostingWindow)&&fixedPosting.from<=current&&
+    if(recoverPostingAt)return !!recoveryAvailable&&current===recoveryAt&&data.slot===publicationKey(job,clip);
+    return time<current+fixedPostingWindow&&fixedPosting.from<=current&&
      (fixedPosting.slotAt!==current||data.slot===publicationKey(job,clip));
    }
    return !timedPublication(job,clip,scheduled)||now()>=data.nextAt||data.slot===publicationKey(job,clip);
@@ -366,7 +366,7 @@ export function createAutoPublisher({jobs,memory,editing,send,fields,save,platfo
     for(const platform of selection.targets){
      const config=settings.configs[platform];
      if(!config||!memory.readyToSend(clip.posts[platform]))continue;
-     if(memory.recoveryRequested&&platform==='tiktok'&&clip.posts.tiktok?.reason===inboxLimit)continue;
+     if(memory.recoveryRequested&&platform!=='youtube')continue;
      const canStart=()=>settings.enabled&&settings.configs[platform]===config&&jobs.includes(job)&&clip.posting===selection&&awaitingPublication(clip)&&!editing.has(clip)&&platformAvailable(platform,config)&&memory.canSend(job,clip,true)&&
       (platform!=='tiktok'||tiktokInboxApproved(clip,config)&&memory.tiktokInboxReady(config.channel));
      if(!settings.enabled||clip.posting!==selection||!awaitingPublication(clip))break;
