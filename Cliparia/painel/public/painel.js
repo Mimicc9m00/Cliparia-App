@@ -1,7 +1,7 @@
 const titles={queue:'Fila de postagem',overdue:'Envios pendentes há 48 h ou mais',library:'Biblioteca de cortes',lives:'Lives e replays'};
 const views=Object.keys(titles);
 const ui=Object.fromEntries([...views,'refresh','automation','last-sync','toggle','notice','queued-count','overdue-count','library-count','search','shuffle','clips','more',
- 'view-title','posting-panel','posting-summary','posting-countdown','live-panel','live-form','live-status','toggle-generation','live-list','add-live','batch-status','batch-link'].map(id=>[id,document.getElementById(id)]));
+ 'view-title','posting-panel','posting-summary','posting-countdown','live-panel','live-form','live-status','toggle-generation','live-list','add-live','batch-status','batch-link','drive-status'].map(id=>[id,document.getElementById(id)]));
 const labels={youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok · finalizar no celular'};
 const resultLabels={select:'Destinos atualizados',remove:'Corte removido da fila',up:'Ordem atualizada',down:'Ordem atualizada',shuffle:'Fila aleatorizada',enabled:'Postagem automática atualizada','add-live':'Fonte cadastrada no Contínuo','generation-enabled':'Geração de clipes atualizada','trash-video':'Vídeo movido para a lixeira do Drive','restore-video':'Vídeo restaurado no Drive'};
 const copyLabels={pending:'Aguardando transcrição do Drive',retry:'Transcrição será tentada novamente','no-speech':'Sem fala reconhecida',sensitive:'Texto pendente de revisão de conteúdo'};
@@ -183,6 +183,10 @@ async function refresh(force=false){
   if(!response.ok)throw Error('Não foi possível consultar a fila.');
   const data=await response.json();
   if(request!==requestNumber)return;
+  const driveMessage={reconnect:'O Google Drive precisa ser reconectado. A geração e a postagem aguardam o acesso à fila.',
+   expiring:'A autorização do Google Drive vence nas próximas 24 horas. Reconecte a conta antes do próximo vencimento.'}[data.driveIssue]||'';
+  if(ui['drive-status'].textContent!==driveMessage)ui['drive-status'].textContent=driveMessage;
+  ui['drive-status'].hidden=!driveMessage;
   const changed=force||data.snapshot?.updatedAt!==snapshot?.updatedAt||pending!==data.pending;
   snapshot=data.snapshot;pending=data.pending;
   if(!snapshot){inform('O primeiro lote ainda precisa sincronizar a fila.');render();return;}

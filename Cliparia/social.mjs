@@ -35,6 +35,8 @@ export function cloudVault(key,onlyDrive=false){
  if(!vault.drive?.tokens?.refresh)throw Error('Reconecte o Google Drive antes de preparar a execução na nuvem.');
  return seal(onlyDrive?{drive:vault.drive}:vault,key);
 }
+export function driveAuthorization(){return vault.drive;}
+export function restoreDriveAuthorization(drive){vault.drive=drive;save();}
 function save(){
  fs.writeFileSync(location+'.tmp',protect(Buffer.from(JSON.stringify(vault)),'Protect'));fs.renameSync(location+'.tmp',location);
 }
@@ -183,7 +185,7 @@ async function grant(p,body,requested){
  const previous=c.tokens;
  const data=new URLSearchParams({...body,[p!=='tiktok'?'client_id':'client_key']:c.id,client_secret:c.secret});
  // Não imprima data: inclui client_secret, código OAuth, code_verifier e refresh_token.
- const j=await read(await fetch(urls[p],{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:data}));
+ const j=await read(await fetch(urls[p],{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:data,signal:AbortSignal.timeout(15000)}));
  if(!j.access_token)throw Error('A API não retornou access_token. Verifique as credenciais, o Redirect URI e o ambiente do aplicativo TikTok.');
  const refresh=body.grant_type==='refresh_token';
  if(vault[p]!==c||refresh&&c.tokens!==previous){
@@ -199,7 +201,10 @@ async function grant(p,body,requested){
   }
   scopes=actual.join(',');
  }
+ const refreshExpires=Number.isFinite(j.refresh_token_expires_in)&&j.refresh_token_expires_in>0
+  ?Date.now()+j.refresh_token_expires_in*1000:refresh&&!j.refresh_token?previous?.refreshExpires:undefined;
  c.tokens={account:refresh?previous?.account:'',scopes,access:j.access_token,refresh:j.refresh_token||(refresh?previous?.refresh:undefined),expires:Date.now()+j.expires_in*1000,
+  ...(refreshExpires?{refreshExpires}:{}),
   ...(p==='tiktok'?{inboxAccount:refresh?previous?.inboxAccount:crypto.randomUUID()}:{})};save();
 }
 export async function callbackLogin(q){
@@ -217,11 +222,13 @@ export async function callbackLogin(q){
 }
 const refreshing=new Map();
 export async function auth(p){
- const t=vault[p]?.tokens;if(!t)throw Error('Conecte a conta em Contas.');
+ const t=vault[p]?.tokens;
+ const reconnect=()=>Object.assign(Error(p==='drive'?'O Google Drive precisa ser reconectado em Contas.':'Autorização expirada. Reconecte o perfil em Contas.'),{reason:'oauth_reconnect',platform:p});
+ if(!t)throw reconnect();
  if(t.expires<Date.now()+60000){
   if(!refreshing.has(p)){
    const refresh=grant(p,{grant_type:'refresh_token',refresh_token:t.refresh})
-    .catch(e=>{if(e.reason==='invalid_grant'&&vault[p]?.tokens===t){disconnect(p);throw Error('Autorização expirada. Reconecte o perfil em Contas.');}throw e;})
+    .catch(e=>{if(e.reason==='invalid_grant'&&vault[p]?.tokens===t){disconnect(p);throw reconnect();}throw e;})
     .finally(()=>refreshing.delete(p));
    refreshing.set(p,refresh);
   }

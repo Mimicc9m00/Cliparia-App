@@ -67,7 +67,8 @@ export class ClipariaPanel{
   if(pathname==='/api/state'){
    const stored=this.sql.exec('SELECT payload FROM snapshots WHERE id=1').toArray()[0];
    const pending=this.sql.exec('SELECT COUNT(*) AS count FROM commands WHERE done=0').one().count;
-   return json({snapshot:stored?JSON.parse(stored.payload):null,pending});
+   const driveIssue=(await this.storage.get('cloud-drive'))?.issue;
+   return json({snapshot:stored?JSON.parse(stored.payload):null,pending,...(driveIssue?{driveIssue}:{})});
   }
   if(pathname==='/api/commands'){
    const command=commandFrom(await body(request,4096));
@@ -80,6 +81,15 @@ export class ClipariaPanel{
   if(pathname==='/bridge/commands'){
    const commands=this.sql.exec('SELECT payload FROM commands WHERE done=0 ORDER BY seq LIMIT 5').toArray().map(row=>JSON.parse(row.payload));
    return json({commands});
+  }
+  if(pathname==='/bridge/drive'){
+   if(request.method==='GET')return json((await this.storage.get('cloud-drive'))??null);
+   const value=await body(request,16_384);
+   if(!value||![null,'expiring','reconnect'].includes(value.issue)||typeof value.fingerprint!=='string'||!/^[a-f0-9]{64}$/.test(value.fingerprint)||
+    typeof value.authorization!=='string'||!/^[A-Za-z0-9+/]{32,16000}={0,2}$/.test(value.authorization))return json({error:'Autorização inválida.'},400);
+   const {issue,fingerprint,authorization}=value;
+   await this.storage.put('cloud-drive',{issue,fingerprint,authorization});
+   return json({ok:true});
   }
   if(pathname==='/bridge/snapshot'){
    const snapshot=await body(request,maxSnapshot);
@@ -164,7 +174,8 @@ export default {
   const route=url.pathname;
   const authorization=request.headers.get('Authorization');
   if(route.startsWith('/bridge/')){
-   const allowed=route==='/bridge/commands'&&request.method==='GET'||route==='/bridge/snapshot'&&request.method==='POST';
+   const allowed=route==='/bridge/commands'&&request.method==='GET'||route==='/bridge/snapshot'&&request.method==='POST'||
+    route==='/bridge/drive'&&['GET','POST'].includes(request.method);
    if(!allowed)return json({error:'Página indisponível.'},404);
    if(!env.PANEL_BRIDGE_TOKEN||!await credentialsEqual('Bearer '+env.PANEL_BRIDGE_TOKEN,authorization))return json({error:'Sem acesso.'},401);
   }else{

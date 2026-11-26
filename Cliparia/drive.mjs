@@ -1,8 +1,9 @@
 import {auth} from './social.mjs';
 import {responseChunks} from './remote.mjs';
+import {setTimeout as delay} from 'node:timers/promises';
 const api='https://www.googleapis.com/drive/v3/files';
 async function checked(res){
- if(!res.ok){const e=await res.json().catch(()=>({}));throw Error(e.error?.message||'Google Drive respondeu '+res.status);}
+ if(!res.ok){const e=await res.json().catch(()=>({}));throw Object.assign(Error(e.error?.message||'Google Drive respondeu '+res.status),{httpStatus:res.status});}
  return res;
 }
 async function request(url,opts={}){
@@ -23,7 +24,23 @@ export async function createCloudState(bytes){
  return id;
 }
 export async function writeCloudState(id,bytes){
- await request('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(id)+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'application/octet-stream'},body:bytes,signal:AbortSignal.timeout(30_000)});
+ await retryCloudRequest(()=>request('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(id)+'?uploadType=media',{
+  method:'PATCH',headers:{'Content-Type':'application/octet-stream'},body:bytes,signal:AbortSignal.timeout(30_000),
+ }));
+}
+export async function readCloudState(id){
+ return retryCloudRequest(async()=>Buffer.from(await (await media(id,undefined,AbortSignal.timeout(40_000))).arrayBuffer()));
+}
+async function retryCloudRequest(run){
+ for(let attempt=0;;attempt++){
+  try{return await run();}
+  catch(error){
+   const retryable=error.httpStatus===408||error.httpStatus===429||error.httpStatus>=500||
+    error.name==='TimeoutError'||error.name==='AbortError'||error instanceof TypeError&&!!error.cause?.code;
+   if(attempt>=2||!retryable)throw error;
+   await delay(1000*2**attempt);
+  }
+ }
 }
 export function replace(id,bytes){return send('/'+encodeURIComponent(id),{},bytes);}
 async function send(file,metadata,bytes){

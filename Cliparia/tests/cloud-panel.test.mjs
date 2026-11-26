@@ -151,6 +151,24 @@ test('o painel exige senha e origem do mesmo site, e separa a credencial da inte
  assert.equal(accessed,2);
 });
 
+test('o navegador vê o aviso do Drive e só o lote acessa a autorização criptografada',async()=>{
+ const records=new Map();
+ const storage={get:key=>records.get(key),put:(key,value)=>records.set(key,value),sql:{exec:()=>({toArray:()=>[],one:()=>({count:0})})}};
+ const panel=new ClipariaPanel({storage});
+ const env={PANEL_PASSWORD:'browser',PANEL_BRIDGE_TOKEN:'integration',PANEL:{idFromName:()=>0,get:()=>panel}};
+ const browser={Authorization:'Basic '+btoa('cliparia:browser')};
+ const bridge={Authorization:'Bearer integration','Content-Type':'application/json'};
+ const request=(route,options)=>worker.fetch(new Request('https://panel.example'+route,options),env);
+ const payload={fingerprint:'a'.repeat(64),authorization:'b'.repeat(80),issue:'reconnect'};
+ assert.equal((await request('/bridge/drive',{headers:browser})).status,401);
+ assert.equal((await request('/bridge/drive',{method:'POST',headers:bridge,body:JSON.stringify({...payload,issue:'qualquer'})})).status,400);
+ assert.equal((await request('/bridge/drive',{method:'POST',headers:bridge,body:JSON.stringify(payload)})).status,200);
+ assert.deepEqual(await (await request('/bridge/drive',{headers:bridge})).json(),payload);
+ assert.deepEqual(await (await request('/api/state',{headers:browser})).json(),{snapshot:null,pending:0,driveIssue:'reconnect'});
+ assert.equal((await request('/bridge/drive',{method:'POST',headers:bridge,body:JSON.stringify({...payload,issue:null})})).status,200);
+ assert.deepEqual(await (await request('/api/state',{headers:browser})).json(),{snapshot:null,pending:0});
+});
+
 test('o cron do painel dispara o GitHub apenas quando não existe outro lote recente',async t=>{
  const scheduledTime=Date.now();
  const env={GITHUB_REPOSITORY:'owner/cliparia',GITHUB_DISPATCH_TOKEN:'teste'};
