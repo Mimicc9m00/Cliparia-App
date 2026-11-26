@@ -105,7 +105,7 @@ function publishedLink(platform,post){
  }
  return '';
 }
-export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={}){
+export function createPublicationMemory(file,{now=Date.now,fixedHours=false,recoverPostingAt}={}){
  const data=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):{nextAt:0,slot:null,records:{}};
  data.intervalMinutes??=publicationInterval/60_000;
  data.automatic??={enabled:false,configs:{}};
@@ -118,6 +118,9 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
   migrated=true;
  }
  const fixedPosting=fixedHours?data.fixedPosting:null;
+ const recoveryAt=Date.parse(recoverPostingAt);
+ const recoveryAvailable=recoverPostingAt&&fixedPosting&&now()>=recoveryAt&&now()<Date.parse("2026-11-27T03:00:00Z")&&
+  fixedPosting.from<=recoveryAt&&!(fixedPosting.slotAt>=recoveryAt);
  if(data.cooldowns&&Object.hasOwn(data.cooldowns,'youtube')){delete data.cooldowns.youtube;migrated=true;}
  for(const post of Object.values(data.records))migrated=clearLegacyYouTubeWait(post)||migrated;
  // Clear a legacy countdown only when it matches a later inbox retry and the original sends already had their interval.
@@ -179,11 +182,13 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
    return result;
   },
   canTrashPending(job,clip){return canTrashPendingClip(job,clip,data.records,now());},
+  recoveryRequested:!!recoverPostingAt,
   canSend(job,clip,scheduled=false){
    if(fixedPosting&&scheduled){
     const time=now(),current=postingHour(time,-1);
-    return time<current+fixedPostingWindow&&fixedPosting.from<=current&&
-     (fixedPosting.slotAt!==current||data.slot===publicationKey(job,clip));
+    if(recoverPostingAt&&(!recoveryAvailable||time>=Date.parse("2026-11-27T03:00:00Z")))return false;
+    return (recoveryAvailable||time<current+fixedPostingWindow)&&fixedPosting.from<=current&&
+     (fixedPosting.slotAt!==(recoveryAvailable?recoveryAt:current)||data.slot===publicationKey(job,clip));
    }
    return !timedPublication(job,clip,scheduled)||now()>=data.nextAt||data.slot===publicationKey(job,clip);
   },
@@ -193,7 +198,7 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
   },
   tiktokOnlyRemaining(job,clip){
    if(!fixedPosting||!clip.posting?.targets.includes('tiktok'))return false;
-   if(fixedPosting.slotAt===postingHour(now(),-1)&&data.slot===publicationKey(job,clip))return false;
+   if(fixedPosting.slotAt===(recoveryAvailable?recoveryAt:postingHour(now(),-1))&&data.slot===publicationKey(job,clip))return false;
    const otherTargets=clip.posting.targets.filter(p=>p!=='tiktok'&&automaticPlatforms.includes(p));
    return otherTargets.length>0&&otherTargets.every(p=>publishedOn(job,clip,p));
   },
@@ -220,10 +225,10 @@ export function createPublicationMemory(file,{now=Date.now,fixedHours=false}={})
    const inboxRetry=scheduled&&platform==='tiktok'&&clip.posts.tiktok?.reason===inboxLimit&&retryPending(clip.posts.tiktok);
    const finishingTikTok=fixed&&platform==='tiktok'&&this.tiktokOnlyRemaining(job,clip);
    if(timed&&!this.canSend(job,clip,scheduled))throw Error(fixed?'Aguarde o próximo horário de postagem.':'Aguarde o intervalo de '+data.intervalMinutes+' minutos da fila de postagem. Próximo envio a partir de '+new Date(data.nextAt).toLocaleString('pt-BR')+'.');
-   if(timed&&!inboxRetry&&!finishingTikTok){
+   if(timed&&(recoveryAvailable||!inboxRetry&&!finishingTikTok)){
     if(data.slot!==key)delete data.manuallyRestarted;
     data.slot=key;
-    if(fixed)fixed.slotAt=postingHour(now(),-1);
+    if(fixed)fixed.slotAt=recoveryAvailable?recoveryAt:postingHour(now(),-1);
     else if(!data.manuallyRestarted)data.nextAt=Math.max(data.nextAt,now()+interval());
    }
    data.records[keyFor(job,clip,platform)]={state:'Enviando',startedAt:now()};
@@ -361,6 +366,7 @@ export function createAutoPublisher({jobs,memory,editing,send,fields,save,platfo
     for(const platform of selection.targets){
      const config=settings.configs[platform];
      if(!config||!memory.readyToSend(clip.posts[platform]))continue;
+     if(memory.recoveryRequested&&platform==='tiktok'&&clip.posts.tiktok?.reason===inboxLimit)continue;
      const canStart=()=>settings.enabled&&settings.configs[platform]===config&&jobs.includes(job)&&clip.posting===selection&&awaitingPublication(clip)&&!editing.has(clip)&&platformAvailable(platform,config)&&memory.canSend(job,clip,true)&&
       (platform!=='tiktok'||tiktokInboxApproved(clip,config)&&memory.tiktokInboxReady(config.channel));
      if(!settings.enabled||clip.posting!==selection||!awaitingPublication(clip))break;
@@ -372,7 +378,7 @@ export function createAutoPublisher({jobs,memory,editing,send,fields,save,platfo
       if(!await youtubeVerified||clip.posts.youtube||clip.youtubeReview?.candidates?.length||!canStart())continue;
      }
      if(platform==='tiktok'&&memory.tiktokOnlyRemaining(job,clip)){
-      if(tiktokContinuationStarted)continue;
+      if(memory.recoveryRequested||tiktokContinuationStarted)continue;
       tiktokContinuationStarted=true;
      }
      try{await send(job,clip,null,platform,{...config,...fields(platform,config,job,clip),consent:true},canStart);}

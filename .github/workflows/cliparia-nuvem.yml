@@ -1,5 +1,5 @@
 name: Cliparia · Executar lote na nuvem
-run-name: ${{ inputs.painel_somente && 'Cliparia · Sincronizar painel' || inputs.revisar_textos && 'Cliparia · Transcrever cortes recuperados' || 'Cliparia · Gerar e publicar' }}
+run-name: Cliparia · Recuperar postagem das 8h
 
 on:
   workflow_dispatch:
@@ -12,11 +12,10 @@ on:
         description: Transcrever os cortes recuperados da fila sem publicar vídeos
         type: boolean
         default: false
-  schedule:
-    - cron: '8/15 * * * *'
 
 permissions:
   packages: read
+  contents: read
 
 concurrency:
   group: cliparia-state-single-writer
@@ -36,8 +35,11 @@ jobs:
       CLIPARIA_PANEL_TOKEN: ${{ secrets.CLIPARIA_PANEL_TOKEN }}
       CLIPARIA_PANEL_SYNC_ONLY: ${{ inputs.painel_somente }}
       CLIPARIA_CLOUD_COPY_ONLY: ${{ inputs.revisar_textos }}
+      CLIPARIA_RECOVER_POSTING_SLOT: '2026-11-26T11:00:00Z'
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Obter o código da recuperação
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Processar um lote
         run: |
           prefix="ghcr.io/${GITHUB_REPOSITORY,,}@sha256:"
@@ -50,5 +52,7 @@ jobs:
           docker run --rm --init \
             -e CLIPARIA_VAULT_KEY -e CLIPARIA_CLOUD_FILE_ID -e CLIPARIA_CLOUD_DRIVE \
             -e CLIPARIA_PANEL_URL -e CLIPARIA_PANEL_TOKEN -e CLIPARIA_PANEL_SYNC_ONLY \
-            -e CLIPARIA_CLOUD_COPY_ONLY \
+            -e CLIPARIA_CLOUD_COPY_ONLY -e CLIPARIA_RECOVER_POSTING_SLOT \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/Cliparia/publishing.mjs,dst=/app/publishing.mjs,readonly" \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/Cliparia/app.mjs,dst=/app/app.mjs,readonly" \
             "$CLIPARIA_IMAGE" node cloud-run.mjs
